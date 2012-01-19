@@ -1,0 +1,7 @@
+jutter is a JavaScript/WebGL reimplementation of the Clutter APIs.
+It is intended to make it easier to create 2.5D interfaces using
+web technologies.
+
+jutter is a project of One Laptop Per Child.  It is part of our
+"Nell" project for the XO-3 tablet computer, which seeks to
+reimagine educational software for the developing world.
