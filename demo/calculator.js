@@ -11,6 +11,9 @@ var Calculator = function(args) {
         Clutter.main();
         stage.destroy();
     }
+    console.log(Clutter.Color.from_string("rgb(255,100%,33)"));
+    console.log(Clutter.Color.from_string("rgba(255,100%,33, 50%)"));
+    console.log(Clutter.Color.from_string("hsl(180,0.5,0.5)"));
 };
 
 var c = new Calculator([]);

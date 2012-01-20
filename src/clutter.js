@@ -44,6 +44,7 @@ define(["./dom", "./color"], function(Dom, Color) {
 
     return {
         init: init,
+        Color: Color,
         Stage: Stage,
         main: main
     };

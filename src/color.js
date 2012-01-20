@@ -135,11 +135,54 @@ define(['./color-x11'], function(X11) {
     };
     /** Make X11-style named color table. */
     var _x11_color_table = X11.make_color_table(Color);
-    var parse_rgba = function(str) {
-        throw new Error("rgba unimplemented");
+    var _color_re = /\(\s*([-+]?\d*\.?\d+)\s*(%\s*)?,\s*([-+]?\d*\.?\d+)\s*(%\s*)?,\s*([-+]?\d*\.?\d+)\s*(%\s*)?(,\s*([-+]?\d*\.?\d+)\s*(%\s*)?)?\)/;
+    var parse_rgba = function(str, has_alpha) {
+        var m = str.trim().match(_color_re);
+        if (!m) return null;
+        var red = parseFloat(m[1]);
+        if (m[2]) { red = (red/100) * 255; }
+        var green = parseFloat(m[3]);
+        if (m[4]) { green = (green/100) * 255; }
+        var blue = parseFloat(m[5]);
+        if (m[6]) { blue = (blue/100) * 255; }
+        var alpha = 255;
+        if (has_alpha) {
+            if (!m[7]) return null;
+            alpha = parseFloat(m[8]);
+            if (m[9]) { alpha = alpha/100; }
+            alpha *= 255;
+        }
+        return new Color(clamp(Math.round(red)),
+                         clamp(Math.round(green)),
+                         clamp(Math.round(blue)),
+                         clamp(Math.round(alpha)));
     };
-    var parse_hsla = function(str) {
-        throw new Error("hsla unimplemented");
+    var parse_hsla = function(str, has_alpha) {
+        var m = str.trim().match(_color_re);
+        if (!m) return null;
+
+        var h = parseFloat(m[1]);
+        if (m[2]) { h = (h/100) * 360; }
+        h = (h < 0) ? 0 : (h>360) ? 360 : h;
+
+        var l = parseFloat(m[3]);
+        if (m[4]) { l = l/100; }
+        l = (l < 0) ? 0 : (l > 1) ? 1 : l;
+
+        var s = parseFloat(m[5]);
+        if (m[6]) { s = s/100; }
+        s = (s < 0) ? 0 : (s > 1) ? 1 : s;
+
+        var alpha = 255;
+        if (has_alpha) {
+            if (!m[7]) return null;
+            alpha = parseFloat(m[8]);
+            if (m[9]) { alpha = alpha/100; }
+            alpha *= 255;
+        }
+        alpha = clamp(Math.round(alpha));
+
+        return Color.from_hls(h, l, s, alpha);
     };
     var parse_hex_color = function(str) {
         var r = parseInt(str, 16);
