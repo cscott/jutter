@@ -1,4 +1,4 @@
-define(["./color", "./note"], function(Color, Note) {
+define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -39,47 +39,55 @@ define(["./color", "./note"], function(Color, Note) {
     };
     Object.freeze(TraverseVisitFlags);
 
+    var ActorPrivateFlags = {
+        IN_DESTRUCTION:  1 << 0,
+        IS_TOPLEVEL   :  1 << 1,
+        IN_REPARENT   :  1 << 2,
+        IN_PAINT      :  1 << 3,
+        IN_RELAYOUT   :  1 << 4,
+        IN_RESIZE     :  1 << 5,
+        INTERNAL_CHILD:  1 << 6
+    };
+    Object.freeze(ActorPrivateFlags);
+
+    var PRIVATE = "_actor_private";
+    var ActorPrivate = function() { this._init(); }
+    ActorPrivate.prototype = {
+        _init: function() {
+            this.flags = 0;
+            this.pick_id = -1;
+        },
+        get in_destruction() {
+            return !!(this.flags & ActorPrivateFlags.IN_DESTRUCTION);
+        },
+        get toplevel() {
+            return !!(this.flags & ActorPrivateFlags.IS_TOPLEVEL);
+        },
+        get in_reparent() {
+            return !!(this.flags & ActorPrivateFlags.INTERNAL_CHILD);
+        },
+        get in_paint() {
+            return !!(this.flags & ActorPrivateFlags.IN_PAINT);
+        },
+        get in_relayout() {
+            return !!(this.flags & ActorPrivateFlags.IN_RELAYOUT);
+        },
+        get in_resize() {
+            return !!(this.flags & ActorPrivateFlags.IN_RESIZE);
+        },
+        get internal_child() {
+            return !!(this.flags & ActorPrivateFlags.INTERNAL_CHILD);
+        }
+    };
+
     var Actor = function() {
-        this.flags = 0;
-        var private_flags;
-
-        var PrivateFlags = {
-            IN_DESTRUCTION:  1 << 0,
-            IS_TOPLEVEL   :  1 << 1,
-            IN_REPARENT   :  1 << 2,
-            IN_PAINT      :  1 << 3,
-            IN_RELAYOUT   :  1 << 4,
-            IN_RESIZE     :  1 << 5,
-            INTERNAL_CHILD:  1 << 6
-        };
-        Object.freeze(PrivateFlags);
-
-        this['private'] = {
-            pick_id: -1,
-            get in_destruction() {
-                return !!(private_flags & PrivateFlags.IN_DESTRUCTION);
-            },
-            get toplevel() {
-                return !!(private_flags & PrivateFlags.IS_TOPLEVEL);
-            },
-            get in_reparent() {
-                return !!(private_flags & PrivateFlags.INTERNAL_CHILD);
-            },
-            get in_paint() {
-                return !!(private_flags & PrivateFlags.IN_PAINT);
-            },
-            get in_relayout() {
-                return !!(private_flags & PrivateFlags.IN_RELAYOUT);
-            },
-            get in_resize() {
-                return !!(private_flags & PrivateFlags.IN_RESIZE);
-            },
-            get internal_child() {
-                return !!(private_flags & PrivateFlags.INTERNAL_CHILD);
-            }
-        };
+        this._init();
     };
     Actor.prototype = {
+        _init: function() {
+            this.flags = 0;
+            this[PRIVATE] = new ActorPrivate();
+        },
         get mapped() { return !!(this.flags & ActorFlags.MAPPED); },
         set mapped(mapped) {
             if (this.mapped == mapped) return;
@@ -93,7 +101,7 @@ define(["./color", "./note"], function(Color, Note) {
         verify_map_state: function() {
             // DEBUGGING ONLY
             // could stick a 'return' here once this is all tested & working
-            var priv = this['private'];
+            var priv = this[PRIVATE];
 
             if (this.realized) {
                 /* all bets are off during reparent when we're potentially realized,
@@ -143,10 +151,10 @@ define(["./color", "./note"], function(Color, Note) {
                          * become pointless
                          */
                         while (iter) {
-                            if (iter['private'].enable_paint_unmapped)
+                            if (iter[PRIVATE].enable_paint_unmapped)
                                 return;
 
-                            iter = iter['private'].parent;
+                            iter = iter[PRIVATE].parent;
                         }
 
                         if (!priv.parent.visible) {
@@ -157,7 +165,7 @@ define(["./color", "./note"], function(Color, Note) {
                             console.warn("Actor should not be mapped if parent"+
                                          " is not realized", this, priv.parent);
                         }
-                        if (!priv.parent['private'].toplevel) {
+                        if (!priv.parent[PRIVATE].toplevel) {
                             if (!priv.parent.mapped) {
                                 console.warn("Actor is mapped but its "+
                                              "non-toplevel parent is not "+
@@ -171,7 +179,7 @@ define(["./color", "./note"], function(Color, Note) {
 
         update_map_state: function(change) {
             var was_mapped = this.mapped;
-            if (this['private'].toplevel) {
+            if (this[PRIVATE].toplevel) {
                 /* the mapped flag on top-level actors must be set by the
                  * per-backend implementation because it might be asynchronous.
                  *
@@ -212,12 +220,12 @@ define(["./color", "./note"], function(Color, Note) {
                 }
 
                 if (this.mapped && !this.visible &&
-                    !this['private'].in_destruction) {
+                    !this[PRIVATE].in_destruction) {
                     console.warn("Clutter toplevel is not visible, "+
                                  "but it is somehow still mapped", this);
                 }
             } else {
-                var parent = this['private'].parent;
+                var parent = this[PRIVATE].parent;
 
                 var should_be_mapped = false;
                 var may_be_realized = true;
@@ -257,7 +265,7 @@ define(["./color", "./note"], function(Color, Note) {
                     if (this.visible && change !== MapState.MAKE_UNMAPPED) {
                         var parent_is_visible_realized_toplevel;
                         parent_is_visible_realized_toplevel =
-                            parent['private'].toplevel &&
+                            parent[PRIVATE].toplevel &&
                             parent.visible && parent.realized;
 
                         if (parent.mapped ||
@@ -271,7 +279,7 @@ define(["./color", "./note"], function(Color, Note) {
                      * this is an override for the branch of the scene graph
                      * which begins with this node
                      */
-                    if (this['private'].enable_paint_unmapped) {
+                    if (this[PRIVATE].enable_paint_unmapped) {
                         if (!parent) {
                             console.warn("Attempting to map an "+
                                          "unparented actor", this);
@@ -302,7 +310,7 @@ define(["./color", "./note"], function(Color, Note) {
                  */
 
                 /* Unmap */
-                if (!should_be_mapped && !this['private'].in_reparent) {
+                if (!should_be_mapped && !this[PRIVATE].in_reparent) {
                     this.mapped = false;
                 }
 
@@ -315,7 +323,7 @@ define(["./color", "./note"], function(Color, Note) {
                 console.assert(!(must_be_realized && !may_be_realized));
 
                 /* Unrealize */
-                if (!may_be_realized && !this['private'].in_reparent) {
+                if (!may_be_realized && !this[PRIVATE].in_reparent) {
                     this.unrealize_not_hiding();
                 }
 
@@ -349,14 +357,14 @@ define(["./color", "./note"], function(Color, Note) {
             this.flags |= ActorFlags.MAPPED;
 
             var stage = this._get_stage_internal();
-            this['private'].pick_id = stage.acquire_pick_id(this);
-            Note.ACTOR("Pick id", this['private'].pick_id,
+            this[PRIVATE].pick_id = stage.acquire_pick_id(this);
+            Note.ACTOR("Pick id", this[PRIVATE].pick_id,
                         "for actor", this);
 
             /* notify on parent mapped before potentially mapping
              * children, so apps see a top-down notification.
              */
-            this.emit_prop('mapped');
+            this.notify('mapped');
 
             this._foreach_child(function() { this.map(); });
         },
@@ -398,21 +406,21 @@ define(["./color", "./note"], function(Color, Note) {
             /* clear the contents of the last paint volume, so that hiding + moving +
              * showing will not result in the wrong area being repainted
              */
-            this['private'].last_paint_volume.init();
-            this['private'].last_paint_volume_valid = true;
+            this[PRIVATE].last_paint_volume.init();
+            this[PRIVATE].last_paint_volume_valid = true;
 
             /* notify on parent mapped after potentially unmapping
              * children, so apps see a bottom-up notification.
              */
-            this.emit_prop('mapped');
+            this.notify('mapped');
 
             /* relinquish keyboard focus if we were unmapped while owning it */
-            if (!this['private'].toplevel) {
+            if (!this[PRIVATE].toplevel) {
                 stage = this._get_stage_internal();
                 if (stage) {
-                    stage._release_pick_id(this['private'].pick_id);
+                    stage._release_pick_id(this[PRIVATE].pick_id);
                 }
-                this['private'].pick_id = -1;
+                this[PRIVATE].pick_id = -1;
                 if (stage && stage.key_focus == this) {
                     stage.key_focus = null;
                 }
@@ -468,7 +476,7 @@ define(["./color", "./note"], function(Color, Note) {
             /* we queue a relayout unless the actor is inside a
              * container that explicitly told us not to
              */
-            var priv = this['private'];
+            var priv = this[PRIVATE];
             if (priv.parent && !priv.parent.no_layout) {
                 /* While an actor is hidden the parent may not have
                  * allocated/requested so we need to start from scratch
@@ -482,14 +490,17 @@ define(["./color", "./note"], function(Color, Note) {
             }
         },
 
-        _set_show_on_set_parent: function(set_show) {
-            var priv = this['private'];
+        get show_on_set_parent() {
+            return this[PRIVATE].show_on_set_parent;
+        },
+        set show_on_set_parent(set_show) {
+            var priv = this[PRIVATE];
             set_show = !!set_show;
             if (priv.show_on_set_parent === set_show)
                 return;
             if (!priv.parent) {
                 priv.show_on_set_parent = set_show;
-                this.emit_prop('show_on_set_parent');
+                this.notify('show_on_set_parent');
             }
         },
 /**
@@ -511,7 +522,7 @@ define(["./color", "./note"], function(Color, Note) {
                 /* we still need to set the :show-on-set-parent property, in
                  * case show() is called on an unparented actor
                  */
-                this._set_show_on_set_parent(true);
+                this.show_on_set_parent = true;
                 return;
             }
 
@@ -519,12 +530,12 @@ define(["./color", "./note"], function(Color, Note) {
 
             this.freeze_notify();
 
-            this._set_show_on_set_parent(true);
+            this.show_on_set_parent = true;
 
             this.emit('show');
-            this.emit_prop('visible'); // XXX CSA visible flag not toggled?!
+            this.notify('visible'); // XXX CSA visible flag not toggled?!
 
-            var priv = this['private'];
+            var priv = this[PRIVATE];
             if (priv.parent)
                 priv.parent.queue_redraw();
 
@@ -544,7 +555,7 @@ define(["./color", "./note"], function(Color, Note) {
             /* we queue a relayout unless the actor is inside a
              * container that explicitly told us not to
              */
-            var priv = this['private'];
+            var priv = this[PRIVATE];
             if (priv.parent && !priv.parent.no_layout) {
                 priv.parent.queue_relayout();
             }
@@ -569,7 +580,7 @@ define(["./color", "./note"], function(Color, Note) {
                 /* we still need to set the :show-on-set-parent property, in
                  * case hide() is called on an unparented actor
                  */
-                this._set_show_on_set_parent(false);
+                this.show_on_set_parent = false;
                 return;
             }
 
@@ -577,12 +588,12 @@ define(["./color", "./note"], function(Color, Note) {
 
             this.freeze_notify();
 
-            this._set_show_on_set_parent(false);
+            this.show_on_set_parent = false;
 
             this.emit('hide');
-            this.emit_prop('visible'); // XXX CSA visible flag not toggled?!
+            this.notify('visible'); // XXX CSA visible flag not toggled?!
 
-            var priv = this['private'];
+            var priv = this[PRIVATE];
             if (priv.parent)
                 priv.parent.queue_redraw();
 
@@ -617,7 +628,7 @@ define(["./color", "./note"], function(Color, Note) {
             /* To be realized, our parent actors must be realized first.
              * This will only succeed if we're inside a toplevel.
              */
-            var priv = this['private'];
+            var priv = this[PRIVATE];
             if (priv.parent)
                 priv.parent.realize();
 
@@ -639,7 +650,7 @@ define(["./color", "./note"], function(Color, Note) {
             Note.ACTOR("Realizing actor", this);
 
             this.flags |= ActorFlags.REALIZED;
-            this.emit_prop('realized');
+            this.notify('realized');
 
             this.emit('realize');
 
@@ -738,7 +749,7 @@ define(["./color", "./note"], function(Color, Note) {
                  * child actors are unrealized, to maintain invariants.
                  */
                 this.flags &= (~ActorFlags.REALIZED);
-                this.emit_prop('realized');
+                this.notify('realized');
                 return TraverseVisitFlags.CONTINUE;
             };
             this._traverse(TraverseFlags.DEPTH_FIRST,
@@ -799,8 +810,8 @@ define(["./color", "./note"], function(Color, Note) {
 
         _get_stage_internal: function() {
             var actor = this;
-            while (actor && !actor['private'].toplevel) {
-                actor = actor['private'].parent;
+            while (actor && !actor[PRIVATE].toplevel) {
+                actor = actor[PRIVATE].parent;
             }
             return actor;
         },
@@ -929,7 +940,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         has_constraints: function() {
-            return !!(this['private'].constraints);
+            return !!(this[PRIVATE].constraints);
         },
 
 /**
@@ -944,7 +955,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         has_actions: function() {
-            return !!(this['private'].actions);
+            return !!(this[PRIVATE].actions);
         },
 
 /**
@@ -958,7 +969,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         get n_children() {
-            return this['private'].n_children;
+            return this[PRIVATE].n_children;
         },
 
 /**
@@ -1010,7 +1021,7 @@ define(["./color", "./note"], function(Color, Note) {
         },
 
         get background_color_set() {
-            return this['private'].bg_color_set;
+            return this[PRIVATE].bg_color_set;
         },
 /**
  * clutter_actor_set_background_color:
@@ -1029,10 +1040,10 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         set background_color(color) {
-            var priv = this['private'];
+            var priv = this[PRIVATE];
             if (!color) {
                 priv.bg_color_set = false;
-                this.emit_prop('background_color_set');
+                this.notify('background_color_set');
                 return;
             }
             if (priv.bg_color_set && Color.equal(color, priv.bg_color))
@@ -1043,8 +1054,8 @@ define(["./color", "./note"], function(Color, Note) {
 
             this.queue_redraw();
 
-            this.emit_prop('background_color_set');
-            this.emit_prop('background_color');
+            this.notify('background_color_set');
+            this.notify('background_color');
         },
 /**
  * clutter_actor_get_background_color:
@@ -1056,7 +1067,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         get background_color() {
-            return this['private'].bg_color.copy();
+            return this[PRIVATE].bg_color.copy();
         },
 /**
  * clutter_actor_get_previous_sibling:
@@ -1074,7 +1085,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         get previous_sibling() {
-            return this['private'].prev_sibling;
+            return this[PRIVATE].prev_sibling;
         },
 /**
  * clutter_actor_get_next_sibling:
@@ -1092,7 +1103,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         get next_sibling() {
-            return this['private'].next_sibling;
+            return this[PRIVATE].next_sibling;
         },
 /**
  * clutter_actor_get_first_child:
@@ -1109,7 +1120,7 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         get first_child() {
-            return this['private'].first_child;
+            return this[PRIVATE].first_child;
         },
 /**
  * clutter_actor_get_last_child:
@@ -1126,9 +1137,10 @@ define(["./color", "./note"], function(Color, Note) {
  * Since: 1.10
  */
         get last_child() {
-            return this['private'].last_child;
+            return this[PRIVATE].last_child;
         }
     };
+    Signals.addSignalMethods(Actor.prototype);
 
     return Actor;
 });

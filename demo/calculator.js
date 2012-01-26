@@ -5,7 +5,7 @@ var Calculator = function(args) {
     var stage = Clutter.Stage.get_default();
     stage.title = 'Calculator';
 
-    stage.show_all();
+    stage.show();
     if (false) {
         /* not needed in jutter */
         Clutter.main();
