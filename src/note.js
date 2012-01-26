@@ -1,4 +1,7 @@
 define([], function() {
-    /** "note" function -- uses console.log, but can be turned off. */
-    return console.log;
+    /** "note" functions -- uses console.log, but can be turned off. */
+    // different log levels
+    return {
+        ACTOR: console.log
+    };
 });

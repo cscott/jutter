@@ -17,5 +17,10 @@ var Calculator = function(args) {
 };
 
 var c = new Calculator([]);
+
+// write to global context for easier debugging
+this.Calculator = Calculator;
+this.Clutter = Clutter;
+
 return { Calculator: Calculator };
 });

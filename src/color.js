@@ -356,6 +356,19 @@ define(['./color-x11'], function(X11) {
                          alpha);
     };
     /**
+     * Compares two #Color<!-- -->s and checks if they are the same.
+     *
+     * Return value: %TRUE if the two colors are the same.
+     */
+    Color.equal = function(a, b) {
+        if (a === b) return true;
+
+        return (a.red   === b.red   &&
+                a.green === b.green &&
+                a.blue  === b.blue  &&
+                a.alpha === b.alpha);
+    };
+    /**
      * Adds @a to @b and returns the resulting color.
      *
      * The alpha channel of @result is set as as the maximum value
