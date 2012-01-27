@@ -1,5 +1,4 @@
-define(["./color", "./event", "./note", "./signals"],
-       function(Color, Event, Note, Signals) {
+define(["./color", "./event", "./note", "./signals"], function(Color, Event, Note, Signals) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -44,16 +43,19 @@ define(["./color", "./event", "./note", "./signals"],
         CREATE_META:      1 << 0,
         EMIT_PARENT_SET:  1 << 1,
         EMIT_ACTOR_ADDED: 1 << 2,
-        CHECK_STATE:      1 << 3
+        CHECK_STATE:      1 << 3,
+        NOTIFY_FIRST_LAST:1 << 4
     };
     AddChildFlags.DEFAULT_FLAGS =
         AddChildFlags.CREATE_META |
         AddChildFlags.EMIT_PARENT_SET |
         AddChildFlags.EMIT_ACTOR_ADDED |
-        AddChildFlags.CHECK_STATE;
+        AddChildFlags.CHECK_STATE |
+        AddChildFlags.NOTIFY_FIRST_LAST;
     AddChildFlags.LEGACY_FLAGS =
         AddChildFlags.EMIT_PARENT_SET |
-        AddChildFlags.CHECK_STATE;
+        AddChildFlags.CHECK_STATE |
+        AddChildFlags.NOTIFY_FIRST_LAST;
     Object.freeze(AddChildFlags);
 
     var RemoveChildFlags = {
@@ -61,18 +63,21 @@ define(["./color", "./event", "./note", "./signals"],
         EMIT_PARENT_SET:    1 << 1,
         EMIT_ACTOR_REMOVED: 1 << 2,
         CHECK_STATE:        1 << 3,
-        FLUSH_QUEUE:        1 << 4
+        FLUSH_QUEUE:        1 << 4,
+        NOTIFY_FIRST_LAST:  1 << 5
     };
     RemoveChildFlags.DEFAULT_FLAGS =
         RemoveChildFlags.DESTROY_META |
         RemoveChildFlags.EMIT_PARENT_SET |
         RemoveChildFlags.EMIT_ACTOR_REMOVED |
         RemoveChildFlags.CHECK_STATE |
-        RemoveChildFlags.FLUSH_QUEUE;
+        RemoveChildFlags.FLUSH_QUEUE |
+        RemoveChildFlags.NOTIFY_FIRST_LAST;
     RemoveChildFlags.LEGACY_FLAGS =
         RemoveChildFlags.CHECK_STATE |
         RemoveChildFlags.FLUSH_QUEUE |
-        RemoveChildFlags.EMIT_PARENT_SET;
+        RemoveChildFlags.EMIT_PARENT_SET |
+        RemoveChildFlags.NOTIFY_FIRST_LAST;
     Object.freeze(RemoveChildFlags);
 
     var ActorPrivateFlags = {
@@ -886,6 +891,9 @@ define(["./color", "./event", "./note", "./signals"],
             var priv = this[PRIVATE];
             var iter, tmp;
 
+            child[PRIVATE].parent = this;
+
+            /* special-case the first child */
             if (priv.n_children === 0) {
                 priv.first_child = child;
                 priv.last_child = child;
@@ -918,6 +926,7 @@ define(["./color", "./event", "./note", "./signals"],
                 if (tmp)
                     tmp[PRIVATE].next_sibling = child;
 
+                /* insert the node at the end of the list */
                 child[PRIVATE].prev_sibling = this[PRIVATE].last_child;
                 child[PRIVATE].next_sibling = null;
             }
@@ -931,6 +940,8 @@ define(["./color", "./event", "./note", "./signals"],
 
         _insert_child_at_index: function(child, index_) {
             var tmp;
+
+            child[PRIVATE].parent = this;
 
             if (index_ === 0) {
                 tmp = this[PRIVATE].first_child;
@@ -957,7 +968,7 @@ define(["./color", "./event", "./note", "./signals"],
                     if (index_ === i) {
                         tmp = iter[PRIVATE].prev_sibling;
 
-                        child[PRIVATE].prev_sibling =iter[PRIVATE].prev_sibling;
+                        child[PRIVATE].prev_sibling =tmp;
                         child[PRIVATE].next_sibling =iter;
 
                         iter[PRIVATE].prev_sibling = child;
@@ -979,6 +990,8 @@ define(["./color", "./event", "./note", "./signals"],
 
         _insert_child_above: function(child, sibling) {
             var tmp;
+
+            child[PRIVATE].parent = this;
 
             if (!sibling)
                 sibling = this[PRIVATE].last_child;
@@ -1007,6 +1020,8 @@ define(["./color", "./event", "./note", "./signals"],
 
         _insert_child_below: function(child, sibling) {
             var tmp;
+
+            child[PRIVATE].parent = this;
 
             if (!sibling)
                 sibling = this[PRIVATE].first_child;
@@ -1070,6 +1085,7 @@ define(["./color", "./event", "./note", "./signals"],
             var emit_parent_set =  !!(flags & AddChildFlags.EMIT_PARENT_SET);
             var emit_actor_added = !!(flags & AddChildFlags.EMIT_ACTOR_ADDED);
             var check_state =      !!(flags & AddChildFlags.CHECK_STATE);
+            var notify_first_last= !!(flags & AddChildFlags.NOTIFY_FIRST_LAST);
 
             var old_first_child = this[PRIVATE].first_child;
             var old_last_child  = this[PRIVATE].last_child;
@@ -1079,12 +1095,16 @@ define(["./color", "./event", "./note", "./signals"],
                 this.create_child_meta(child);
             }
 
-            child[PRIVATE].parent = this;
+            child[PRIVATE].parent = null;
+            child[PRIVATE].next_sibling = null;
+            child[PRIVATE].prev_sibling = null;
 
             /* delegate the actual insertion */
             var args = Array.prototype.slice.call(arguments, 2);
             args[0] = child;
             add_func.apply(this, args);
+
+            console.assert(child[PRIVATE].parent === this);
 
             this[PRIVATE].n_children += 1;
 
@@ -1139,12 +1159,14 @@ define(["./color", "./event", "./note", "./signals"],
                 this.emit("actor-added", child);
             }
 
-            if (old_first_child !== this[PRIVATE].first_child) {
-                this.notify('first_child');
-            }
+            if (notify_first_last) {
+                if (old_first_child !== this[PRIVATE].first_child) {
+                    this.notify('first_child');
+                }
 
-            if (old_last_child !== this[PRIVATE].last_child) {
-                this.notify('last_child');
+                if (old_last_child !== this[PRIVATE].last_child) {
+                    this.notify('last_child');
+                }
             }
         },
 
@@ -1319,6 +1341,7 @@ define(["./color", "./event", "./note", "./signals"],
             var emit_actor_removed = !!(flags & RemoveChildFlags.EMIT_ACTOR_REMOVED);
             var check_state = !!(flags & RemoveChildFlags.CHECK_STATE);
             var flush_queue = !!(flags & RemoveChildFlags.FLUSH_QUEUE);
+            var notify_first_last = !!(flags & RemoveChildFlags.NOTIFY_FIRST_LAST);
 
             if (destroy_meta) {
                 this.destroy_child_meta(child);
@@ -1363,12 +1386,8 @@ define(["./color", "./event", "./note", "./signals"],
                 child._traverse(0, invalidate_queue_redraw_entry, null);
             }
 
-            child[PRIVATE].parent = null;
-
-            /* clutter_actor_reparent() will emit ::parent-set for us */
-            if (emit_parent_set && !child[PRIVATE].in_reparent) {
-                child.emit('parent-set', this/* old parent */);
-            }
+            var old_first = this[PRIVATE].first_child;
+            var old_last  = this[PRIVATE].last_child;
 
             var remove_child = function(self, child) {
                 var prev_sibling = child[PRIVATE].prev_sibling;
@@ -1387,10 +1406,19 @@ define(["./color", "./event", "./note", "./signals"],
                 if (self[PRIVATE].last_child === child) {
                     self[PRIVATE].last_child = prev_sibling;
                 }
+
+                child[PRIVATE].parent = null;
+                child[PRIVATE].prev_sibling = null;
+                child[PRIVATE].next_sibling = null;
             };
             remove_child(this, child);
 
             this[PRIVATE].n_children -= 1;
+
+            /* clutter_actor_reparent() will emit ::parent-set for us */
+            if (emit_parent_set && !child[PRIVATE].in_reparent) {
+                child.emit('parent-set', this/* old parent */);
+            }
 
             /* if the child was mapped then we need to relayout ourselves to account
              * for the removed child
@@ -1402,6 +1430,15 @@ define(["./color", "./event", "./note", "./signals"],
             /* we need to emit the signal before dropping the reference */
             if (emit_actor_removed) {
                 this.emit('actor-removed', child);
+            }
+
+            if (notify_first_last) {
+                if (old_first !== this[PRIVATE].first_child) {
+                    this.notify('first_child');
+                }
+                if (old_last !== this[PRIVATE].last_child) {
+                    this.notify('last_child');
+                }
             }
         },
 
@@ -1463,6 +1500,7 @@ define(["./color", "./event", "./note", "./signals"],
 
 
         _insert_child_between: function(child, prev_sibling, next_sibling) {
+            child[PRIVATE].parent = this;
             child[PRIVATE].prev_sibling = prev_sibling;
             child[PRIVATE].next_sibling = next_sibling;
 
@@ -1500,7 +1538,6 @@ define(["./color", "./event", "./note", "./signals"],
 
             var prev_sibling = old_child[PRIVATE].prev_sibling;
             var next_sibling = old_child[PRIVATE].next_sibling;
-
             this._remove_child_internal(old_child,
                                         RemoveChildFlags.DEFAULT_FLAGS);
             this._add_child_internal(new_child,
@@ -1565,7 +1602,7 @@ define(["./color", "./event", "./note", "./signals"],
              * through one known code path.
              */
             this._remove_child_internal(child, 0);
-            this._add_child_internal(child, 0,
+            this._add_child_internal(child, AddChildFlags.NOTIFY_FIRST_LAST,
                                      this._insert_child_above, sibling);
 
             this.queue_relayout();
@@ -1599,7 +1636,7 @@ define(["./color", "./event", "./note", "./signals"],
 
             /* see the comment in set_child_above_sibling() */
             this._remove_child_internal(child, 0);
-            this._add_child_internal(child, 0,
+            this._add_child_internal(child, AddChildFlags.NOTIFY_FIRST_LAST,
                                      this._insert_child_below, sibling);
 
             this.queue_relayout();
@@ -1626,7 +1663,7 @@ define(["./color", "./event", "./note", "./signals"],
             console.assert(index_ <= this[PRIVATE].n_children);
 
             this._remove_child_internal(child, 0);
-            this._add_child_internal(child, 0,
+            this._add_child_internal(child, AddChildFlags.NOTIFY_FIRST_LAST,
                                      this._insert_child_at_index, index_);
 
             this.queue_relayout();
