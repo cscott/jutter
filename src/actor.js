@@ -1141,6 +1141,101 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
         }
     };
     Signals.addSignalMethods(Actor.prototype);
+    Signals.register(Actor.prototype, {
+        destroy: {
+            flags: Signals.RUN_CLEANUP | Signals.NO_RECURSE | Signals.NO_HOOKS,
+        },
+        show: {
+            flags: Signals.RUN_FIRST,
+            closure: Actor.prototype.real_show
+        },
+        hide: {
+            flags: Signals.RUN_FIRST,
+            closure: Actor.prototype.real_hide
+        },
+        'parent-set': {
+            flags: Signals.RUN_LAST,
+        },
+        'queue-redraw': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_queue_redraw
+        },
+        'queue-relayout': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_queue_relayout
+        },
+        event: {
+            flags: Signals.RUN_LAST,
+        },
+        'button-press-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'button-release-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'scroll-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'key-press-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'key-release-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'motion-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'key-focus-in': {
+            flags: Signals.RUN_LAST,
+        },
+        'key-focus-out': {
+            flags: Signals.RUN_LAST,
+        },
+        'enter-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'leave-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'captured-event': {
+            flags: Signals.RUN_LAST,
+        },
+        'paint': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_paint
+        },
+        'map': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_map
+        },
+        'unmap': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_unmap
+        },
+        'realize': {
+            flags: Signals.RUN_LAST,
+        },
+        'unrealize': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_unrealize
+        },
+        'pick': {
+            flags: Signals.RUN_LAST,
+            closure: Actor.prototype.real_pick
+        },
+        'allocation-changed': {
+            flags: Signals.RUN_LAST
+        },
+        'allocate': {
+            closure: Actor.prototype.real_allocate
+        },
+        'get-preferred-width': {
+            closure: Actor.prototype.real_get_preferred_width
+        },
+        'get-preferred-height': {
+            closure: Actor.prototype.real_get_preferred_height
+        },
+    });
 
     return Actor;
 });

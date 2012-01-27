@@ -26,7 +26,8 @@ define([], function() {
 // 2) memory and safety matter more than speed of connect/disconnect/emit
 // 3) the expectation is that a given object will have a very small number of
 //    connections, but they may be to different signal names
-function _connect(name, callback) {
+
+function _connect(name, callback, run_last) {
     // be paranoid about callback arg since we'd start to throw from emit()
     // if it was messed up
     if (typeof(callback) != 'function')
@@ -48,9 +49,16 @@ function _connect(name, callback) {
     this._signalConnections.push({ 'id' : id,
                                    'name' : name,
                                    'callback' : callback,
-                                   'disconnected' : false
+                                   'disconnected' : false,
+                                   'run_last': run_last
                                  });
     return id;
+}
+function _connect_first(name, callback) {
+    return _connect.call(this, name, callback, true);
+}
+function _connect_last(name, callback) {
+    return _connect.call(this, name, callback, false);
 }
 
 function _disconnect(id) {
@@ -82,10 +90,22 @@ function _disconnectAll() {
     }
 }
 
+var RUN_FIRST=   1 << 0;
+var RUN_LAST =   1 << 1;
+var RUN_CLEANUP= 1 << 2;
+var NO_RECURSE=  1 << 3;
+var NO_HOOKS=    1 << 4;
+
 function _emit(name /* , arg1, arg2 */) {
     // may not be any signal handlers at all, if not then return
-    if (!('_signalConnections' in this))
+    var _signalConnections;
+    if ('_signalConnections' in this) {
+        _signalConnections = this._signalConnections;
+    } else if (('_signalClosure-'+name) in this) {
+        _signalConnections = [];
+    } else {
         return;
+    }
 
     // To deal with re-entrancy (removal/addition while
     // emitting), we copy out a list of what was connected
@@ -93,9 +113,9 @@ function _emit(name /* , arg1, arg2 */) {
     // handler we check its disconnected flag.
     var handlers = [];
     var i;
-    var length = this._signalConnections.length;
+    var length = _signalConnections.length;
     for (i = 0; i < length; ++i) {
-        var connection = this._signalConnections[i];
+        var connection = _signalConnections[i];
         if (connection.name == name) {
             handlers.push(connection);
         }
@@ -114,25 +134,58 @@ function _emit(name /* , arg1, arg2 */) {
     for (i = 1; i < length; ++i) {
         arg_array.push(arguments[i]);
     }
+    var cont = true;
+
+    var closure = null;
+    if (('_signalClosure-'+name) in this) {
+        closure = this['_signalClosure-'+name];
+    }
+    var flags = 0;
+    if (('_signalFlags-'+name) in this) {
+        flags = this['_signalFlags-'+name];
+    }
+
+    if (cont && closure && (flags & RUN_FIRST)) {
+        try {
+            cont = !closure.apply(this, arg_array);
+        } catch (e) {
+            console.error("Exception in class closure for signal: "+name, e);
+        }
+    }
 
     length = handlers.length;
-    for (i = 0; i < length; ++i) {
-        var connection = handlers[i];
-        if (!connection.disconnected) {
+    for (j = 0; cont && j < 2; ++j) {
+        for (i = 0; cont && i < length; ++i) {
+            var connection = handlers[i];
+            if (connection.disconnected)
+                continue;
+            if ((j===0) !== !connection.run_last)
+                continue;
             try {
-                // since we pass "null" for this, the global object will be used.
-                var ret = connection.callback.apply(null, arg_array);
-
                 // if the callback returns true, we don't call the next
                 // signal handlers
-                if (ret === true) {
-                    break;
-                }
+                cont = !connection.callback.apply(this, arg_array);
+
             } catch(e) {
                 // just log any exceptions so that callbacks can't disrupt
                 // signal emission
-                logError(e, "Exception in callback for signal: "+name);
+                console.error("Exception in callback for signal: "+name, e);
             }
+        }
+    }
+    if (cont && closure && (flags & RUN_LAST)) {
+        try {
+            cont = !closure.apply(this, arg_array);
+        } catch (e) {
+            console.error("Exception in class closure for signal: "+name, e);
+        }
+    }
+
+    if (closure && (flags & RUN_CLEANUP)) {
+        try {
+            cont = !closure.apply(this, arg_array);
+        } catch (e) {
+            console.error("Exception in class closure for signal: "+name, e);
         }
     }
 }
@@ -167,7 +220,8 @@ function _thaw_notify() {
 }
 
 function addSignalMethods(proto) {
-    proto.connect = _connect;
+    proto.connect = _connect_first;
+    proto.connect_after = _connect_last;
     proto.disconnect = _disconnect;
     proto.emit = _emit;
     proto.notify = _notify;
@@ -177,7 +231,29 @@ function addSignalMethods(proto) {
     proto.disconnectAll = _disconnectAll;
 }
 
+function register(proto, signals) {
+    var props;
+    for (key in signals) {
+        if (!signals.hasOwnProperty(key)) continue;
+        props = signals[key];
+        if ('flags' in props) {
+            proto['_signalFlags-'+key] = props.flags;
+        }
+        if ('closure' in props) {
+            proto['_signalClosure-'+key] = props.closure;
+        }
+    }
+}
+
+
     return {
-        addSignalMethods: addSignalMethods
+        RUN_FIRST:   RUN_FIRST,
+        RUN_LAST :   RUN_LAST,
+        RUN_CLEANUP: RUN_CLEANUP,
+        NO_RECURSE:  NO_RECURSE,
+        NO_HOOKS:    NO_HOOKS,
+
+        addSignalMethods: addSignalMethods,
+        register: register
     };
 });
