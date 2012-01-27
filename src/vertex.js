@@ -15,12 +15,27 @@ define([], function() {
  *
  * Since: 1.0
  */
-    function Vertex(x, y, z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
+    var Vertex = function(x, y, z) {
+        this._init(x, y, z);
+    };
     Vertex.prototype = {
+        _init: function(x, y, z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        },
+        /** Reset all fields to 0 */
+        init: function() {
+            this.set(0,0,0);
+        },
+        set_from_vertex: function(v) {
+            this.set(v.x, v.y, v.z);
+        },
+        set: function(x, y, z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        },
         copy: function() {
             return new Vertex(this.x, this.y, this.z);
         },

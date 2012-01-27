@@ -1,5 +1,4 @@
-define(["./actor", "./color", "./geometry", "./stage", "./vertex"],
-       function(Actor, Color, Geometry, Stage, Vertex) {
+define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./stage", "./vertex"], function(Actor, Color, Event, Geometry, PaintVolume, Stage, Vertex) {
 
     var init = function(args) {
     };
@@ -10,7 +9,9 @@ define(["./actor", "./color", "./geometry", "./stage", "./vertex"],
     return {
         Actor: Actor,
         Color: Color,
+        Event: Event,
         Geometry: Geometry,
+        PaintVolume: PaintVolume,
         Stage: Stage,
         Vertex: Vertex,
 

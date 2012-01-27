@@ -127,8 +127,9 @@ function _emit(name /* , arg1, arg2 */) {
     // which does pass it in. Also if we pass in the emitter here,
     // people don't create closures with the emitter in them,
     // which would be a cycle.
+    // XXX CSA mod: pass in emitter as 'this', not as explicit arg.
 
-    var arg_array = [ this ];
+    var arg_array = [ ];
     // arguments[0] should be signal name so skip it
     length = arguments.length;
     for (i = 1; i < length; ++i) {

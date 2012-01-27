@@ -1,4 +1,4 @@
-define(["./color", "./event", "./note", "./signals"], function(Color, Event, Note, Signals) {
+define(["./color", "./context", "./event", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Event, Note, PaintVolume, Signals, Vertex) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -80,6 +80,11 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
         RemoveChildFlags.NOTIFY_FIRST_LAST;
     Object.freeze(RemoveChildFlags);
 
+    var RedrawFlags = {
+        CLIPPED_TO_ALLOCATION: 1 << 0
+    };
+    Object.freeze(RedrawFlags);
+
     var ActorPrivateFlags = {
         IN_DESTRUCTION:  1 << 0,
         IS_TOPLEVEL   :  1 << 1,
@@ -97,6 +102,26 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
         _init: function() {
             this.flags = 0;
             this.pick_id = -1;
+
+            this.opacity = 0xFF;
+            this.show_on_set_parent = true;
+
+            this.needs_width_request = true;
+            this.needs_height_request = true;
+            this.needs_allocation = true;
+
+            this.cached_width_age = 1;
+            this.cached_height_age = 1;
+
+            this.opacity_override = -1;
+            this.enable_model_view_transform = true;
+
+            /* Initialize an empty paint volume to start with */
+            this.last_paint_volume = new PaintVolume();
+            this.last_paint_volume.init(); // XXX CSA unnecessary?
+            this.last_paint_volume_valid = true;
+
+            this.transform_valid = false;
         },
         get in_destruction() {
             return !!(this.flags & ActorPrivateFlags.IN_DESTRUCTION);
@@ -128,6 +153,7 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
         _init: function() {
             this.flags = 0;
             this[PRIVATE] = new ActorPrivate();
+            this[PRIVATE].id = Context.acquire_id(this);
         },
         get mapped() { return !!(this.flags & ActorFlags.MAPPED); },
         set mapped(mapped) {
@@ -388,7 +414,7 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
             }
 
             /* check all invariants were kept */
-            this.verify_map_state(); // XXX DEBUG XXX
+            this.verify_map_state();
         },
 
         real_map: function() {
@@ -574,7 +600,8 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
             this.show_on_set_parent = true;
 
             this.emit('show');
-            this.notify('visible'); // XXX CSA visible flag not toggled?!
+            console.assert(this.visible); // CSA toggled by closure on emit
+            this.notify('visible');
 
             var priv = this[PRIVATE];
             if (priv.parent)
@@ -632,7 +659,8 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
             this.show_on_set_parent = false;
 
             this.emit('hide');
-            this.notify('visible'); // XXX CSA visible flag not toggled?!
+            console.assert(!this.visible); // CSA toggled by closure on emit
+            this.notify('visible');
 
             var priv = this[PRIVATE];
             if (priv.parent)
@@ -897,17 +925,73 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
             /* calls klass->queue_redraw in default handler */
             this.emit('queue-redraw', origin);
         },
-        // XXX CSA XXX I think we're going to get an extra arg from signal
+
         real_queue_redraw: function(origin) {
             Note.PAINT("Redraw queued on ", this, " from ",
                        origin || "same actor");
 
+            /* no point in queuing a redraw on a destroyed actor */
             if (this[PRIVATE].in_destruction)
                 return;
-            // XXX I'M HERE XXX
-            console.error("Unimplemented");
+
+            /* If the queue redraw is coming from a child then the actor has
+               become dirty and any queued effect is no longer valid */
+            if (this !== origin) {
+                this[PRIVATE].is_dirty = true;
+                this[PRIVATE].effect_to_redraw = null;
+            }
+
+            /* If the actor isn't visible, we still had to emit the signal
+             * to allow for a ClutterClone, but the appearance of the parent
+             * won't change so we don't have to propagate up the hierarchy.
+             */
+            if (!this.visible)
+                return;
+
+            /* Although we could determine here that a full stage redraw
+             * has already been queued and immediately bail out, we actually
+             * guarantee that we will propagate a queue-redraw signal to our
+             * parent at least once so that it's possible to implement a
+             * container that tracks which of its children have queued a
+             * redraw.
+             */
+            if (this[PRIVATE].propagated_one_redraw) {
+                var stage = this._get_stage_internal();
+                if (stage && stage._has_full_redraw_queued())
+                    return;
+            }
+
+            this[PRIVATE].propagated_one_redraw = true;
+
+            /* notify parents, if they are all visible eventually we'll
+             * queue redraw on the stage, which queues the redraw idle.
+             */
+            var parent = this.parent;
+            if (parent) {
+                /* this will go up recursively */
+                parent._signal_queue_redraw(origin);
+            }
         },
 
+        real_queue_relayout: function() {
+            var priv = this[PRIVATE];
+
+            /* no point in queueing a redraw on a destroyed actor */
+            if (priv.in_destruction)
+                return;
+
+            priv.needs_width_request  = true;
+            priv.needs_height_request = true;
+            priv.needs_allocation     = true;
+
+            /* reset the cached size requests */
+            priv.width_requests = []; // XXX CSA ?
+            priv.height_requests = []; // XXX CSA ?
+
+            /* We need to go all the way up the hierarchy */
+            if (priv.parent)
+                priv.parent._queue_only_relayout();
+        },
 
         _queue_only_relayout: function() {
             var priv = this[PRIVATE];
@@ -961,6 +1045,158 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
 
 
         _queue_redraw_full: function(flags, volume, effect) {
+            var priv = this[PRIVATE];
+
+            /* Here's an outline of the actor queue redraw mechanism:
+             *
+             * The process starts in one of the following two functions which
+             * are wrappers for this function:
+             * clutter_actor_queue_redraw
+             * _clutter_actor_queue_redraw_with_clip
+             *
+             * additionally, an effect can queue a redraw by wrapping this
+             * function in clutter_effect_queue_rerun
+             *
+             * This functions queues an entry in a list associated with the
+             * stage which is a list of actors that queued a redraw while
+             * updating the timelines, performing layouting and processing other
+             * mainloop sources before the next paint starts.
+             *
+             * We aim to minimize the processing done at this point because
+             * there is a good chance other events will happen while updating
+             * the scenegraph that would invalidate any expensive work we might
+             * otherwise try to do here. For example we don't try and resolve
+             * the screen space bounding box of an actor at this stage so as to
+             * minimize how much of the screen redraw because it's possible
+             * something else will happen which will force a full redraw anyway.
+             *
+             * When all updates are complete and we come to paint the stage then
+             * we iterate this list and actually emit the "queue-redraw" signals
+             * for each of the listed actors which will bubble up to the stage
+             * for each actor and at that point we will transform the actors
+             * paint volume into screen coordinates to determine the clip region
+             * for what needs to be redrawn in the next paint.
+             *
+             * Besides minimizing redundant work another reason for this
+             * deferred design is that it's more likely we will be able to
+             * determine the paint volume of an actor once we've finished
+             * updating the scenegraph because its allocation should be up to
+             * date. NB: If we can't determine an actors paint volume then we
+             * can't automatically queue a clipped redraw which can make a big
+             * difference to performance.
+             *
+             * So the control flow goes like this:
+             * One of clutter_actor_queue_redraw,
+             *        _clutter_actor_queue_redraw_with_clip
+             *     or clutter_effect_queue_rerun
+             *
+             * then control moves to:
+             *   _clutter_stage_queue_actor_redraw
+             *
+             * later during _clutter_stage_do_update, once relayouting is done
+             * and the scenegraph has been updated we will call:
+             * _clutter_stage_finish_queue_redraws
+             *
+             * _clutter_stage_finish_queue_redraws will call
+             * _clutter_actor_finish_queue_redraw for each listed actor.
+             * Note: actors *are* allowed to queue further redraws during this
+             * process (considering clone actors or texture_new_from_actor which
+             * respond to their source queueing a redraw by queuing a redraw
+             * themselves). We repeat the process until the list is empty.
+             *
+             * This will result in the "queue-redraw" signal being fired for
+             * each actor which will pass control to the default signal handler:
+             * clutter_actor_real_queue_redraw
+             *
+             * This will bubble up to the stages handler:
+             * clutter_stage_real_queue_redraw
+             *
+             * clutter_stage_real_queue_redraw will transform the actors paint
+             * volume into screen space and add it as a clip region for the next
+             * paint.
+             */
+
+            /* ignore queueing a redraw for actors being destroyed */
+            if (this[PRIVATE].in_destruction)
+                return;
+
+            var stage = this._get_stage_internal();
+
+            /* Ignore queueing a redraw for actors not descended from a stage */
+            if (!stage)
+                return;
+
+            /* ignore queueing a redraw on stages that are being destroyed */
+            if (stage[PRIVATE].in_destruction)
+                return;
+
+            var pv;
+            if (flags & RedrawFlags.CLIPPED_TO_ALLOCATION) {
+
+                /* If the actor doesn't have a valid allocation then we will
+                 * queue a full stage redraw. */
+                if (priv.needs_allocation) {
+                    /* NB: NULL denotes an undefined clip which will result in a
+                     * full redraw... */
+                    this.queue_redraw_clip = null;
+                    this._signal_queue_redraw(this);
+                    return;
+                }
+
+                pv = new PaintVolume();
+                pv.init(); // XXX CSA unnecessary?
+
+                var allocation_clip = this._allocation_clip;
+                var origin = new Vertex(allocation_clip.x1,
+                                        allocation_clip.y1,
+                                        0);
+                pv.origin = origin;
+                pv.width = allocation_clip.x2 - allocation_clip.x1;
+                pv.height = allocation_clip.y2 - allocation_clip.y1;
+            } else {
+                pv = volume;
+            }
+
+            priv.queue_redraw_entry =
+                stage._queue_actor_redraw(priv.queue_redraw_entry, this, pv);
+
+            /* If this is the first redraw queued then we can directly use the
+               effect parameter */
+            if (!priv.is_dirty)
+                priv.effect_to_redraw = effect;
+            /* Otherwise we need to merge it with the existing effect parameter */
+            else if (effect) {
+                /* If there's already an effect then we need to use whichever is
+                   later in the chain of actors. Otherwise a full redraw has
+                   already been queued on the actor so we need to ignore the
+                   effect parameter */
+                if (priv.effect_to_redraw) {
+                    if (!priv.effects) {
+                        console.warn("Redraw queued with an effect that is "+
+                                     "not applied to the actor");
+                    } else {
+                        // XXX CSA: probably use a JS list here, not a
+                        //     emulation of a GList
+                        var l;
+                        for (l = priv.effects._peek_metas();
+                             l;
+                             l = l.next) {
+                            if (l.data === priv.effect_to_redraw ||
+                                l.data === effect)
+                                priv.effect_to_redraw = l.data;
+                        }
+                    }
+                }
+            } else {
+                /* If no effect is specified then we need to redraw the whole
+                   actor */
+                priv.effect_to_redraw = null;
+            }
+
+            priv.is_dirty = true;
+        },
+
+        get _allocation_clip() {
             console.error("Unimplemented");
         },
 
