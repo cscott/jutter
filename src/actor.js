@@ -844,6 +844,108 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
             }
         },
 
+        real_get_preferred_width: function(for_height) {
+            var priv = this[PRIVATE];
+            if (priv.n_children !== 0 &&
+                priv.layout_manager) {
+                Note.LAYOUT("Querying the layout manager for the preferred "+
+                            "width", priv.layout_manager);
+                return priv.layout_manager.get_preferred_width(this,
+                                                               for_height);
+            }
+            /* Default implementation is always 0x0, usually an actor
+             * using this default is relying on someone to set the
+             * request manually
+             */
+            Note.LAYOUT("Default preferred width: 0, 0");
+
+            return {
+                min_width: 0,
+                natural_width: 0
+            };
+        },
+        real_get_preferred_height: function(for_width) {
+            var priv = this[PRIVATE];
+            if (priv.n_children !== 0 &&
+                priv.layout_manager) {
+                Note.LAYOUT("Querying the layout manager for the preferred "+
+                            "height", priv.layout_manager);
+                return priv.layout_manager.get_preferred_height(this,
+                                                                for_width);
+            }
+            /* Default implementation is always 0x0, usually an actor
+             * using this default is relying on someone to set the
+             * request manually
+             */
+            Note.LAYOUT("Default preferred height: 0, 0");
+
+            return {
+                min_height: 0,
+                natural_height: 0
+            };
+        },
+        _signal_queue_redraw: function(origin) {
+            /* no point in queuing a redraw on a destroyed actor */
+            if (this[PRIVATE].in_destruction)
+                return;
+
+            /* NB: We can't bail out early here if the actor is hidden in case
+             * the actor bas been cloned. In this case the clone will need to
+             * receive the signal so it can queue its own redraw.
+             */
+
+            /* calls klass->queue_redraw in default handler */
+            this.emit('queue-redraw', origin);
+        },
+        // XXX CSA XXX I think we're going to get an extra arg from signal
+        real_queue_redraw: function(origin) {
+            Note.PAINT("Redraw queued on ", this, " from ",
+                       origin || "same actor");
+
+            if (this[PRIVATE].in_destruction)
+                return;
+            // XXX I'M HERE XXX
+            console.error("Unimplemented");
+        },
+
+
+        _queue_only_relayout: function() {
+            var priv = this[PRIVATE];
+
+            if (priv.in_destruction)
+                return;
+
+            if (priv.needs_width_request &&
+                priv.needs_height_request &&
+                priv.needs_allocation)
+                return; /* save some cpu cycles */
+
+            if (!priv.toplevel && priv.in_relayout) {
+                console.warn("The actor is currently inside an allocation "+
+                             "cycle; calling queue_relayout() is not "+
+                             "recommended", this);
+            }
+
+            this.emit('queue-relayout');
+            /* (invokes real_queue_relayout as a side-effect) */
+        },
+/**
+ * clutter_actor_queue_relayout:
+ * @self: A #ClutterActor
+ *
+ * Indicates that the actor's size request or other layout-affecting
+ * properties may have changed. This function is used inside #ClutterActor
+ * subclass implementations, not by applications directly.
+ *
+ * Queueing a new layout automatically queues a redraw as well.
+ *
+ * Since: 0.8
+ */
+        queue_relayout: function() {
+            this._queue_only_relayout();
+            this.queue_redraw();
+        },
+
 
         get no_layout() { return !!(this.flags & ActorFlags.NO_LAYOUT); },
         set no_layout(no_layout) {
@@ -855,6 +957,38 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
                 this.flags &= (~ActorFlags.NO_LAYOUT);
             }
             this.notify('no_layout');
+        },
+
+
+        _queue_redraw_full: function(flags, volume, effect) {
+            console.error("Unimplemented");
+        },
+
+/**
+ * clutter_actor_queue_redraw:
+ * @self: A #ClutterActor
+ *
+ * Queues up a redraw of an actor and any children. The redraw occurs
+ * once the main loop becomes idle (after the current batch of events
+ * has been processed, roughly).
+ *
+ * Applications rarely need to call this, as redraws are handled
+ * automatically by modification functions.
+ *
+ * This function will not do anything if @self is not visible, or
+ * if the actor is inside an invisible part of the scenegraph.
+ *
+ * Also be aware that painting is a NOP for actors with an opacity of
+ * 0
+ *
+ * When you are implementing a custom actor you must queue a redraw
+ * whenever some private state changes that will affect painting or
+ * picking of your actor.
+ */
+        queue_redraw: function() {
+            this._queue_redraw_full(0 /* flags */,
+                                    null /* clip volume */,
+                                    null /* effect */);
         },
 
 /**
@@ -1885,6 +2019,59 @@ define(["./color", "./event", "./note", "./signals"], function(Color, Event, Not
                 }
             }
         },
+
+/**
+ * clutter_actor_set_layout_manager:
+ * @self: a #ClutterActor
+ * @manager: (allow-none): a #ClutterLayoutManager, or %NULL to unset it
+ *
+ * Sets the #ClutterLayoutManager delegate object that will be used to
+ * lay out the children of @self.
+ *
+ * The #ClutterActor will take a reference on the passed @manager which
+ * will be released either when the layout manager is removed, or when
+ * the actor is destroyed.
+ *
+ * Since: 1.10
+ */
+        set layout_manager(manager) {
+            var priv = this[PRIVATE];
+
+            var on_layout_manager_changed = function(manager, actor) {
+                actor.queue_relayout();
+            };
+
+            if (priv.layout_manager) {
+                priv.layout_manager.disconnect(priv.layout_manager_id);
+                priv.layout_manager.container = null;
+            }
+            priv.layout_manager = manager;
+            if (priv.layout_manager) {
+                priv.layout_manager.container = this;
+                priv.layout_manager_id =
+                    priv.layout_manager.connect('layout-changed',
+                                                on_layout_manager_changed,
+                                                this);
+            }
+            this.queue_relayout();
+            this.notify('layout_manager');
+        },
+
+/**
+ * clutter_actor_get_layout_manager:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the #ClutterLayoutManager used by @self.
+ *
+ * Return value: (transfer none): a pointer to the #ClutterLayoutManager,
+ *   or %NULL
+ *
+ * Since: 1.10
+ */
+        get layout_manager() {
+            return this[PRIVATE].layout_manager;
+        },
+
 
 /**
  * clutter_actor_has_constraints:

@@ -1,4 +1,4 @@
-define(["./actor", "./color", "./dom"], function(Actor, Color, Dom) {
+define(["./color", "./dom", "./group"], function(Color, Dom, Group) {
     /** A 'Stage' is a top-level window on which child actors are placed
      *  and manipulated.  In jutter, a Stage corresponds to a WebGL canvas.
      */
@@ -6,10 +6,10 @@ define(["./actor", "./color", "./dom"], function(Actor, Color, Dom) {
     var Stage = function(canvas) {
         this._init(canvas);
     };
-    Stage.prototype = Object.create(Actor.prototype, {
+    Stage.prototype = Object.create(Group.prototype, {
         _init: {
             value: function(canvas) {
-                Actor.prototype._init.call(this); // superclass init
+                Group.prototype._init.call(this); // superclass init
                 if (!canvas) {
                     if (!_default_stage) {
                         _default_stage = this;
