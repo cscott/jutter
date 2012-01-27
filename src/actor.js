@@ -39,6 +39,41 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
     };
     Object.freeze(TraverseVisitFlags);
 
+    var AddChildFlags = {
+        CREATE_META:      1 << 0,
+        EMIT_PARENT_SET:  1 << 1,
+        EMIT_ACTOR_ADDED: 1 << 2,
+        CHECK_STATE:      1 << 3
+    };
+    AddChildFlags.DEFAULT_FLAGS =
+        AddChildFlags.CREATE_META |
+        AddChildFlags.EMIT_PARENT_SET |
+        AddChildFlags.EMIT_ACTOR_ADDED |
+        AddChildFlags.CHECK_STATE;
+    AddChildFlags.LEGACY_FLAGS =
+        AddChildFlags.EMIT_PARENT_SET |
+        AddChildFlags.CHECK_STATE;
+    Object.freeze(AddChildFlags);
+
+    var RemoveChildFlags = {
+        DESTROY_META:       1 << 0,
+        EMIT_PARENT_SET:    1 << 1,
+        EMIT_ACTOR_REMOVED: 1 << 2,
+        CHECK_STATE:        1 << 3,
+        FLUSH_QUEUE:        1 << 4
+    };
+    RemoveChildFlags.DEFAULT_FLAGS =
+        RemoveChildFlags.DESTROY_META |
+        RemoveChildFlags.EMIT_PARENT_SET |
+        RemoveChildFlags.EMIT_ACTOR_REMOVED |
+        RemoveChildFlags.CHECK_STATE |
+        RemoveChildFlags.FLUSH_QUEUE;
+    RemoveChildFlags.LEGACY_FLAGS =
+        RemoveChildFlags.CHECK_STATE |
+        RemoveChildFlags.FLUSH_QUEUE |
+        RemoveChildFlags.EMIT_PARENT_SET;
+    Object.freeze(RemoveChildFlags);
+
     var ActorPrivateFlags = {
         IN_DESTRUCTION:  1 << 0,
         IS_TOPLEVEL   :  1 << 1,
@@ -143,7 +178,7 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
                                          this);
                         }
                     } else {
-                        var iter = self;
+                        var iter = this;
 
                         /* check for the enable_paint_unmapped flag on the actor
                          * and parents; if the flag is enabled at any point of this
@@ -231,7 +266,7 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
                 var may_be_realized = true;
                 var must_be_realized = false;
 
-                if (parent === null || change === MapState.MAKE_UNREALIZED) {
+                if ((!parent) || change === MapState.MAKE_UNREALIZED) {
                     may_be_realized = false;
                 } else {
                     /* Maintain invariant that if parent is mapped, and we are
@@ -324,7 +359,7 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
 
                 /* Unrealize */
                 if (!may_be_realized && !this[PRIVATE].in_reparent) {
-                    this.unrealize_not_hiding();
+                    this._unrealize_not_hiding();
                 }
 
                 /* Map */
@@ -805,7 +840,807 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
 
 
         get reactive() { return this.flags & ActorFlags.REACTIVE; },
+        set reactive(reactive) {
+            if (reactive === this.reactive) return;
+
+            if (reactive) {
+                this.flags |= ActorFlags.REACTIVE;
+            } else {
+                this.flags &= (~ActorFlags.REACTIVE);
+            }
+            this.notify('reactive');
+        },
         get no_layout() { return this.flags & ActorFlags.NO_LAYOUT; },
+        set no_layout(no_layout) {
+            if (no_layout === this.no_layout) return;
+
+            if (no_layout) {
+                this.flags |= ActorFlags.NO_LAYOUT;
+            } else {
+                this.flags &= (~ActorFlags.NO_LAYOUT);
+            }
+            this.notify('no_layout');
+        },
+
+/**
+ * clutter_actor_get_children:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the list of children of @self.
+ *
+ * Return value: (transfer container) (element-type ClutterActor): A newly
+ *   allocated #GList of #ClutterActor<!-- -->s. Use g_list_free() when
+ *   done.
+ *
+ * Since: 1.10
+ */
+        get children() {
+            var result = [];
+            this._foreach_child(function() { result.push(this); });
+            return result;
+        },
+
+/*< private >
+ * insert_child_at_depth:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ *
+ * Inserts @child inside the list of children held by @self, using
+ * the depth as the insertion criteria.
+ *
+ * This sadly makes the insertion not O(1), but we can keep the
+ * list sorted so that the painters algorithm we use for painting
+ * the children will work correctly.
+ */
+        _insert_child_at_depth: function(child) {
+            var priv = this[PRIVATE];
+            var iter, tmp;
+
+            if (priv.n_children === 0) {
+                priv.first_child = child;
+                priv.last_child = child;
+                return;
+            }
+
+            /* Find the right place to insert the child so that it will still be
+               sorted and the child will be after all of the actors at the same
+               dept */
+            for (iter = priv.first_child;
+                 iter;
+                 iter = iter[PRIVATE].next_sibling) {
+                if (iter[PRIVATE].z > child[PRIVATE].z)
+                    break;
+            }
+
+            if (iter) {
+                tmp = iter[PRIVATE].prev_sibling;
+
+                if (tmp)
+                    tmp[PRIVATE].next_sibling = child;
+
+                /* Insert the node before the found one */
+                child[PRIVATE].prev_sibling = iter[PRIVATE].prev_sibling;
+                child[PRIVATE].next_sibling = iter;
+                iter[PRIVATE].prev_sibling = child;
+            } else {
+                tmp = this[PRIVATE].last_child;
+
+                if (tmp)
+                    tmp[PRIVATE].next_sibling = child;
+
+                child[PRIVATE].prev_sibling = this[PRIVATE].last_child;
+                child[PRIVATE].next_sibling = null;
+            }
+
+            if (!child[PRIVATE].prev_sibling)
+                this[PRIVATE].first_child = child;
+
+            if (!child[PRIVATE].next_sibling)
+                this[PRIVATE].last_child = child;
+        },
+
+        _insert_child_at_index: function(child, index_) {
+            var tmp;
+
+            if (index_ === 0) {
+                tmp = this[PRIVATE].first_child;
+
+                if (tmp)
+                    tmp[PRIVATE].prev_sibling = child;
+
+                child[PRIVATE].prev_sibling = null;
+                child[PRIVATE].next_sibling = tmp;
+            } else if (index_ < 0 || index_ === this[PRIVATE].n_children) {
+                // XXX CSA broken upstream (missing the ==n_children case)
+                tmp = this[PRIVATE].last_child;
+
+                if (tmp)
+                    tmp[PRIVATE].next_sibling = child;
+
+                child[PRIVATE].prev_sibling = tmp;
+                child[PRIVATE].next_sibling = null;
+            } else {
+                var iter, i;
+                for (iter = this[PRIVATE].first_child, i = 0;
+                     iter;
+                     iter = iter[PRIVATE].next_sibling, i += 1) {
+                    if (index_ === i) {
+                        tmp = iter[PRIVATE].prev_sibling;
+
+                        child[PRIVATE].prev_sibling =iter[PRIVATE].prev_sibling;
+                        child[PRIVATE].next_sibling =iter;
+
+                        iter[PRIVATE].prev_sibling = child;
+
+                        if (tmp)
+                            tmp[PRIVATE].next_sibling = child;
+
+                        break;
+                    }
+                }
+            }
+
+            if (!child[PRIVATE].prev_sibling)
+                this[PRIVATE].first_child = child;
+
+            if (!child[PRIVATE].next_sibling)
+                this[PRIVATE].last_child = child;
+        },
+
+        _insert_child_above: function(child, sibling) {
+            var tmp;
+
+            if (!sibling)
+                sibling = this[PRIVATE].last_child;
+
+            child[PRIVATE].prev_sibling = sibling;
+
+            if (sibling) {
+                tmp = sibling[PRIVATE].next_sibling;
+
+                child[PRIVATE].next_sibling = tmp;
+
+                if (tmp)
+                    tmp[PRIVATE].prev_sibling = child;
+
+                sibling[PRIVATE].next_sibling = child;
+            } else {
+                child[PRIVATE].next_sibling = null;
+            }
+
+            if (!child[PRIVATE].prev_sibling)
+                this[PRIVATE].first_child = child;
+
+            if (!child[PRIVATE].next_sibling)
+                this[PRIVATE].last_child = child;
+        },
+
+        _insert_child_below: function(child, sibling) {
+            var tmp;
+
+            if (!sibling)
+                sibling = this[PRIVATE].first_child;
+
+            child[PRIVATE].next_sibling = sibling;
+
+            if (sibling) {
+                tmp = sibling[PRIVATE].prev_sibling;
+
+                child[PRIVATE].prev_sibling = tmp;
+
+                if (tmp)
+                    tmp[PRIVATE].next_sibling = child;
+
+                sibling[PRIVATE].prev_sibling = child;
+            } else {
+                child[PRIVATE].prev_sibling = null;
+            }
+
+            if (!child[PRIVATE].prev_sibling)
+                this[PRIVATE].first_child = child;
+
+            if (!child[PRIVATE].next_sibling)
+                this[PRIVATE].last_child = child;
+        },
+
+/*< private >
+ * clutter_actor_add_child_internal:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ * @flags: control flags for actions
+ * @add_func: delegate function
+ * @data: (closure): data to pass to @add_func
+ *
+ * Adds @child to the list of children of @self.
+ *
+ * The actual insertion inside the list is delegated to @add_func: this
+ * function will just set up the state, perform basic checks, and emit
+ * signals.
+ *
+ * The @flags argument is used to perform additional operations.
+ */
+        _add_child_internal: function(child, flags, add_func) {
+            if (child[PRIVATE].parent) {
+                console.warn("Cannot set a parent on an actor which has a "+
+                             "parent. You must use Actor.remove_child() "+
+                             "first.");
+                return;
+            }
+            if (child[PRIVATE].toplevel) {
+                console.warn("Cannot set a parent on a toplevel actor");
+                return;
+            }
+            if (child[PRIVATE].in_destruction) {
+                console.warn("Cannot set a parent while currently being "+
+                             "destroyed");
+                return;
+            }
+
+            var create_meta =      !!(flags & AddChildFlags.CREATE_META);
+            var emit_parent_set =  !!(flags & AddChildFlags.EMIT_PARENT_SET);
+            var emit_actor_added = !!(flags & AddChildFlags.EMIT_ACTOR_ADDED);
+            var check_state =      !!(flags & AddChildFlags.CHECK_STATE);
+
+            var old_first_child = this[PRIVATE].first_child;
+            var old_last_child  = this[PRIVATE].last_child;
+
+            if (create_meta) {
+                // XXX assert isa Container
+                this.create_child_meta(child);
+            }
+
+            child[PRIVATE].parent = this;
+
+            /* delegate the actual insertion */
+            var args = Array.prototype.slice.call(arguments, 2);
+            args[0] = child;
+            add_func.apply(this, args);
+
+            this[PRIVATE].n_children += 1;
+
+            /* if push_internal() has been called then we automatically set
+             * the flag on the actor
+             */
+            if (this[PRIVATE].internal_child) {
+                child[PRIVATE].flags |= ActorPrivateFlags.INTERNAL_CHILD;
+            }
+
+            /* clutter_actor_reparent() will emit ::parent-set for us */
+            if (emit_parent_set && !child[PRIVATE].in_reparent) {
+                child.emit('parent-set', null/* old parent */);
+            }
+
+            if (check_state) {
+                /* If parent is mapped or realized, we need to also be mapped or
+                 * realized once we're inside the parent.
+                 */
+                child.update_map_state(MapState.CHECK);
+
+                /* propagate the parent's text direction to the child */
+                child.text_direction = this.text_direction;
+            }
+
+            if (child[PRIVATE].show_on_set_parent) {
+                child.show();
+            }
+
+            if (child.mapped) {
+                child.queue_redraw();
+            }
+
+            /* maintain the invariant that if an actor needs layout,
+             * its parents do as well
+             */
+            if (child[PRIVATE].needs_width_request ||
+                child[PRIVATE].needs_height_request ||
+                child[PRIVATE].needs_allocation) {
+                /* we work around the short-circuiting we do
+                 * in clutter_actor_queue_relayout() since we
+                 * want to force a relayout
+                 */
+                child[PRIVATE].needs_width_request = true;
+                child[PRIVATE].needs_height_request = true;
+                child[PRIVATE].needs_allocation = true;
+
+                child[PRIVATE].parent.queue_relayout();
+            }
+
+            if (emit_actor_added) {
+                this.emit("actor-added", child);
+            }
+
+            if (old_first_child !== this[PRIVATE].first_child) {
+                this.notify('first_child');
+            }
+
+            if (old_last_child !== this[PRIVATE].last_child) {
+                this.notify('last_child');
+            }
+        },
+
+/**
+ * clutter_actor_add_child:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ *
+ * Adds @child to the children of @self.
+ *
+ * This function will acquire a reference on @child that will only
+ * be released when calling clutter_actor_remove_child().
+ *
+ * This function will take into consideration the #ClutterActor:depth
+ * of @child, and will keep the list of children sorted.
+ *
+ * This function will emit the #ClutterContainer::actor-added signal
+ * on @self.
+ *
+ * Since: 1.10
+ */
+        add_child: function(child) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(this !== child);
+            console.assert(!child[PRIVATE].parent);
+
+            this._add_child_internal(child, AddChildFlags.DEFAULT_FLAGS,
+                                     this._insert_child_at_depth);
+        },
+
+/**
+ * clutter_actor_insert_child_at_index:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ * @index_: the index
+ *
+ * Inserts @child into the list of children of @self, using the
+ * given @index_.
+ *
+ * This function will acquire a reference on @child that will only
+ * be released when calling clutter_actor_remove_child().
+ *
+ * This function will not take into consideration the #ClutterActor:depth
+ * of @child.
+ *
+ * This function will emit the #ClutterContainer::actor-added signal
+ * on @self.
+ *
+ * Since: 1.10
+ */
+        insert_child_at_index: function(child, index_) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(this !== child);
+            console.assert(!child[PRIVATE].parent);
+
+            this._add_child_internal(child, AddChildFlags.DEFAULT_FLAGS,
+                                     this._insert_child_at_index, index_);
+        },
+
+/**
+ * clutter_actor_insert_child_above:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ * @sibling: (allow-none): a child of @self, or %NULL
+ *
+ * Inserts @child into the list of children of @self, above another
+ * child of @self or, if @sibling is %NULL, above all the children
+ * of @self.
+ *
+ * This function will acquire a reference on @child that will only
+ * be released when calling clutter_actor_remove_child().
+ *
+ * This function will not take into consideration the #ClutterActor:depth
+ * of @child.
+ *
+ * This function will emit the #ClutterContainer::actor-added signal
+ * on @self.
+ *
+ * Since: 1.10
+ */
+        insert_child_above: function(child, sibling) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(this !== child);
+            console.assert(child !== sibling);
+            console.assert(!child[PRIVATE].parent);
+            console.assert((!sibling) ||
+                           (sibling instanceof Actor &&
+                            sibling[PRIVATE].parent === this));
+
+            this._add_child_internal(child, AddChildFlags.DEFAULT_FLAGS,
+                                     this._insert_child_above, sibling);
+        },
+
+/**
+ * clutter_actor_insert_child_below:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ * @sibling: (allow-none): a child of @self, or %NULL
+ *
+ * Inserts @child into the list of children of @self, below another
+ * child of @self or, if @sibling is %NULL, below all the children
+ * of @self.
+ *
+ * This function will acquire a reference on @child that will only
+ * be released when calling clutter_actor_remove_child().
+ *
+ * This function will not take into consideration the #ClutterActor:depth
+ * of @child.
+ *
+ * This function will emit the #ClutterContainer::actor-added signal
+ * on @self.
+ *
+ * Since: 1.10
+ */
+        insert_child_below: function(child, sibling) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(this !== child);
+            console.assert(child !== sibling);
+            console.assert(!child[PRIVATE].parent);
+            console.assert((!sibling) ||
+                           (sibling instanceof Actor &&
+                            sibling[PRIVATE].parent === this));
+
+            this._add_child_internal(child, AddChildFlags.DEFAULT_FLAGS,
+                                     this._insert_child_below, sibling);
+        },
+
+/**
+ * clutter_actor_get_parent:
+ * @self: A #ClutterActor
+ *
+ * Retrieves the parent of @self.
+ *
+ * Return Value: (transfer none): The #ClutterActor parent, or %NULL
+ *  if no parent is set
+ */
+        get parent() {
+            return this[PRIVATE].parent;
+        },
+/**
+ * clutter_actor_get_paint_visibility:
+ * @self: A #ClutterActor
+ *
+ * Retrieves the 'paint' visibility of an actor recursively checking for non
+ * visible parents.
+ *
+ * This is by definition the same as %CLUTTER_ACTOR_IS_MAPPED.
+ *
+ * Return Value: %TRUE if the actor is visibile and will be painted.
+ *
+ * Since: 0.8.4
+ */
+        get paint_visibility() {
+            return this.mapped;
+        },
+
+/*< private >
+ * clutter_actor_remove_child_internal:
+ * @self: a #ClutterActor
+ * @child: the child of @self that has to be removed
+ * @flags: control the removal operations
+ *
+ * Removes @child from the list of children of @self.
+ */
+        _remove_child_internal: function(child, flags) {
+            var destroy_meta = !!(flags & RemoveChildFlags.DESTROY_META);
+            var emit_parent_set = !!(flags & RemoveChildFlags.EMIT_PARENT_SET);
+            var emit_actor_removed = !!(flags & RemoveChildFlags.EMIT_ACTOR_REMOVED);
+            var check_state = !!(flags & RemoveChildFlags.CHECK_STATE);
+            var flush_queue = !!(flags & RemoveChildFlags.FLUSH_QUEUE);
+
+            if (destroy_meta) {
+                this.destroy_child_meta(child);
+            }
+
+            var was_mapped;
+            if (check_state) {
+                was_mapped = child.mapped;
+
+                /* we need to unrealize *before* we set parent_actor to NULL,
+                 * because in an unrealize method actors are dissociating from the
+                 * stage, which means they need to be able to
+                 * clutter_actor_get_stage(). This should unmap and unrealize,
+                 *  unless we're reparenting.
+                 */
+                child.update_map_state(MapState.MAKE_UNREALIZED);
+            } else {
+                was_mapped = false;
+            }
+
+            if (flush_queue) {
+                /* We take this opportunity to invalidate any queue redraw entry
+                 * associated with the actor and descendants since we won't be able to
+                 * determine the appropriate stage after this.
+                 *
+                 * we do this after we updated the mapped state because actors might
+                 * end up queueing redraws inside their mapped/unmapped virtual
+                 * functions, and if we invalidate the redraw entry we could end up
+                 * with an inconsistent state and weird memory corruption. see
+                 * bugs:
+                 *
+                 *   http://bugzilla.clutter-project.org/show_bug.cgi?id=2621
+                 *   https://bugzilla.gnome.org/show_bug.cgi?id=652036
+                 */
+                var invalidate_queue_redraw_entry = function(depth) {
+                    if (this[PRIVATE].queue_redraw_entry) {
+                        this[PRIVATE].queue_redraw_entry.invalidate();
+                        this[PRIVATE].queue_redraw_entry = null;
+                    }
+                    return TraverseVisitFlags.CONTINUE;
+                };
+                child._traverse(0, invalidate_queue_redraw_entry, null);
+            }
+
+            child[PRIVATE].parent = null;
+
+            /* clutter_actor_reparent() will emit ::parent-set for us */
+            if (emit_parent_set && !child[PRIVATE].in_reparent) {
+                child.emit('parent-set', this/* old parent */);
+            }
+
+            var remove_child = function(self, child) {
+                var prev_sibling = child[PRIVATE].prev_sibling;
+                var next_sibling = child[PRIVATE].next_sibling;
+
+                if (prev_sibling) {
+                    prev_sibling[PRIVATE].next_sibling = next_sibling;
+                }
+                if (next_sibling) {
+                    next_sibling[PRIVATE].prev_sibling = prev_sibling;
+                }
+
+                if (self[PRIVATE].first_child === child) {
+                    self[PRIVATE].first_child = next_sibling;
+                }
+                if (self[PRIVATE].last_child === child) {
+                    self[PRIVATE].last_child = prev_sibling;
+                }
+            };
+            remove_child(this, child);
+
+            this[PRIVATE].n_children -= 1;
+
+            /* if the child was mapped then we need to relayout ourselves to account
+             * for the removed child
+             */
+            if (was_mapped) {
+                this.queue_relayout();
+            }
+
+            /* we need to emit the signal before dropping the reference */
+            if (emit_actor_removed) {
+                this.emit('actor-removed', child);
+            }
+        },
+
+/**
+ * clutter_actor_remove_child:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor
+ *
+ * Removes @child from the children of @self.
+ *
+ * This function will release the reference added by
+ * clutter_actor_add_child(), so if you want to keep using @child
+ * you will have to acquire a referenced on it before calling this
+ * function.
+ *
+ * This function will emit the #ClutterContainer::actor-removed
+ * signal on @self.
+ *
+ * Since: 1.10
+ */
+        remove_child: function(child) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(this !== child);
+            console.assert(child[PRIVATE].parent);
+            console.assert(child[PRIVATE].parent === this);
+
+            this._remove_child_internal(child, RemoveChildFlags.DEFAULT_FLAGS);
+        },
+
+/**
+ * clutter_actor_remove_all_children:
+ * @self: a #ClutterActor
+ *
+ * Removes all children of @self.
+ *
+ * This function releases the reference added by inserting a child actor
+ * in the list of children of @self.
+ *
+ * Since: 1.10
+ */
+        remove_all_children: function() {
+            if (this[PRIVATE].n_children === 0) return;
+
+            var iter = this[PRIVATE].first_child;
+            while (iter) {
+                var next = iter[PRIVATE].next_sibling;
+
+                this._remove_child_internal(iter,
+                                            RemoveChildFlags.DEFAULT_FLAGS);
+
+                iter = next;
+            }
+
+            console.assert(!this[PRIVATE].first_child);
+            console.assert(!this[PRIVATE].last_child);
+            console.assert(this[PRIVATE].n_children === 0);
+        },
+
+
+        _insert_child_between: function(child, prev_sibling, next_sibling) {
+            child[PRIVATE].prev_sibling = prev_sibling;
+            child[PRIVATE].next_sibling = next_sibling;
+
+            if (prev_sibling) {
+                prev_sibling[PRIVATE].next_sibling = child;
+            }
+            if (next_sibling) {
+                next_sibling[PRIVATE].prev_sibling = child;
+            }
+            if (!child[PRIVATE].prev_sibling) {
+                this[PRIVATE].first_child = child;
+            }
+            if (!child[PRIVATE].next_sibling) {
+                this[PRIVATE].last_child = child;
+            }
+        },
+/**
+ * clutter_actor_replace_child:
+ * @self: a #ClutterActor
+ * @old_child: the child of @self to replace
+ * @new_child: the #ClutterActor to replace @old_child
+ *
+ * Replaces @old_child with @new_child in the list of children of @self.
+ *
+ * Since: 1.10
+ */
+        replace_child: function(old_child, new_child) {
+            console.assert(this instanceof Actor);
+            console.assert(old_child instanceof Actor);
+            console.assert(old_child.parent === this);
+            console.assert(new_child instanceof Actor);
+            console.assert(old_child !== new_child);
+            console.assert(new_child !== this);
+            console.assert(!new_child.parent);
+
+            var prev_sibling = old_child[PRIVATE].prev_sibling;
+            var next_sibling = old_child[PRIVATE].next_sibling;
+
+            this._remove_child_internal(old_child,
+                                        RemoveChildFlags.DEFAULT_FLAGS);
+            this._add_child_internal(new_child,
+                                     AddChildFlags.DEFAULT_FLAGS,
+                                     this._insert_child_between,
+                                     prev_sibling, next_sibling);
+        },
+
+/**
+ * clutter_actor_contains:
+ * @self: A #ClutterActor
+ * @descendant: A #ClutterActor, possibly contained in @self
+ *
+ * Determines if @descendant is contained inside @self (either as an
+ * immediate child, or as a deeper descendant). If @self and
+ * @descendant point to the same actor then it will also return %TRUE.
+ *
+ * Return value: whether @descendent is contained within @self
+ *
+ * Since: 1.4
+ */
+        contains: function(descendant) {
+            var actor;
+            for (actor = descendant; actor; actor = actor[PRIVATE].parent) {
+                if (actor === this) {
+                    return true;
+                }
+            }
+            return false;
+        },
+
+/**
+ * clutter_actor_set_child_above_sibling:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor child of @self
+ * @sibling: (allow-none): a #ClutterActor child of @self, or %NULL
+ *
+ * Sets @child to be above @sibling in the list of children of @self.
+ *
+ * If @sibling is %NULL, @child will be the new last child of @self.
+ *
+ * This function is logically equivalent to removing @child and using
+ * clutter_actor_insert_child_above(), but it will not emit signals
+ * or change state on @child.
+ *
+ * Since: 1.10
+ */
+        set_child_above_sibling: function(child, sibling) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(child[PRIVATE].parent === this);
+            console.assert(child !== sibling);
+            console.assert((!sibling) || (sibling instanceof Actor));
+
+            if (sibling)
+                console.assert(sibling[PRIVATE].parent === this);
+
+            /* we don't want to change the state of child, or emit signals, or
+             * regenerate ChildMeta instances here, but we still want to follow
+             * the correct sequence of steps encoded in remove_child() and
+             * add_child(), so that correctness is ensured, and we only go
+             * through one known code path.
+             */
+            this._remove_child_internal(child, 0);
+            this._add_child_internal(child, 0,
+                                     this._insert_child_above, sibling);
+
+            this.queue_relayout();
+        },
+
+/**
+ * clutter_actor_set_child_below_sibling:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor child of @self
+ * @sibling: (allow-none): a #ClutterActor child of @self, or %NULL
+ *
+ * Sets @child to be below @sibling in the list of children of @self.
+ *
+ * If @sibling is %NULL, @child will be the new first child of @self.
+ *
+ * This function is logically equivalent to removing @self and using
+ * clutter_actor_insert_child_below(), but it will not emit signals
+ * or change state on @child.
+ *
+ * Since: 1.10
+ */
+        set_child_below_sibling: function(child, sibling) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(child[PRIVATE].parent === this);
+            console.assert(child !== sibling);
+            console.assert((!sibling) || (sibling instanceof Actor));
+
+            if (sibling)
+                console.assert(sibling[PRIVATE].parent === this);
+
+            /* see the comment in set_child_above_sibling() */
+            this._remove_child_internal(child, 0);
+            this._add_child_internal(child, 0,
+                                     this._insert_child_below, sibling);
+
+            this.queue_relayout();
+        },
+
+/**
+ * clutter_actor_set_child_at_index:
+ * @self: a #ClutterActor
+ * @child: a #ClutterActor child of @self
+ * @index_: the new index for @child
+ *
+ * Changes the index of @child in the list of children of @self.
+ *
+ * This function is logically equivalent to removing @child and
+ * calling clutter_actor_insert_child_at_index(), but it will not
+ * emit signals or change state on @child.
+ *
+ * Since: 1.10
+ */
+        set_child_at_index: function(child, index_) {
+            console.assert(this instanceof Actor);
+            console.assert(child instanceof Actor);
+            console.assert(child[PRIVATE].parent === this);
+            console.assert(index_ <= this[PRIVATE].n_children);
+
+            this._remove_child_internal(child, 0);
+            this._add_child_internal(child, 0,
+                                     this._insert_child_at_index, index_);
+
+            this.queue_relayout();
+        },
 
 
         _get_stage_internal: function() {
