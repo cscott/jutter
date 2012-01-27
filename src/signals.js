@@ -104,7 +104,7 @@ function _emit(name /* , arg1, arg2 */) {
     } else if (('_signalClosure-'+name) in this) {
         _signalConnections = [];
     } else {
-        return;
+        return false; // "not handled"
     }
 
     // To deal with re-entrancy (removal/addition while
@@ -188,6 +188,7 @@ function _emit(name /* , arg1, arg2 */) {
             console.error("Exception in class closure for signal: "+name, e);
         }
     }
+    return !cont; // true means "handled"
 }
 
 function _notify(propname) {

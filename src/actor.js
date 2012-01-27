@@ -1,4 +1,5 @@
-define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
+define(["./color", "./event", "./note", "./signals"],
+       function(Color, Event, Note, Signals) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -839,18 +840,7 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
         },
 
 
-        get reactive() { return this.flags & ActorFlags.REACTIVE; },
-        set reactive(reactive) {
-            if (reactive === this.reactive) return;
-
-            if (reactive) {
-                this.flags |= ActorFlags.REACTIVE;
-            } else {
-                this.flags &= (~ActorFlags.REACTIVE);
-            }
-            this.notify('reactive');
-        },
-        get no_layout() { return this.flags & ActorFlags.NO_LAYOUT; },
+        get no_layout() { return !!(this.flags & ActorFlags.NO_LAYOUT); },
         set no_layout(no_layout) {
             if (no_layout === this.no_layout) return;
 
@@ -1642,6 +1632,102 @@ define(["./color", "./note", "./signals"], function(Color, Note, Signals) {
             this.queue_relayout();
         },
 
+/*
+ * Event handling
+ */
+
+/**
+ * clutter_actor_event:
+ * @actor: a #ClutterActor
+ * @event: a #ClutterEvent
+ * @capture: TRUE if event in in capture phase, FALSE otherwise.
+ *
+ * This function is used to emit an event on the main stage.
+ * You should rarely need to use this function, except for
+ * synthetising events.
+ *
+ * Return value: the return value from the signal emission: %TRUE
+ *   if the actor handled the event, or %FALSE if the event was
+ *   not handled
+ *
+ * Since: 0.6
+ */
+        event: function(event, capture) {
+            var retval;
+
+            console.assert(event);
+
+            if (capture) {
+                return this.emit('captured-event', event);
+            }
+
+            retval = this.emit('event', event);
+            if (retval) return retval;
+
+            var signal = null;
+            if (event.type === Event.Type.NOTHING) {
+                signal = null;
+            } else if (event.type === Event.Type.BUTTON_PRESS) {
+                signal = "button-press-event";
+            } else if (event.type === Event.Type.BUTTON_RELEASE) {
+                signal = "button-release-event";
+            } else if (event.type === Event.Type.SCROLL) {
+                signal = "scroll-event";
+            } else if (event.type === Event.Type.KEY_PRESS) {
+                signal = "key-press-event";
+            } else if (event.type === Event.Type.KEY_RELEASE) {
+                signal = "key-release-event";
+            } else if (event.type === Event.Type.MOTION) {
+                signal = "motion-event";
+            } else if (event.type === Event.Type.ENTER) {
+                signal = "enter-event";
+            } else if (event.type === Event.Type.LEAVE) {
+                signal = "leave-event";
+            } else if (event.type === Event.Type.DELETE ||
+                       event.type === Event.Type.DESTROY_NOTIFY ||
+                       event.type === Event.Type.CLIENT_MESSAGE) {
+                signal = null;
+            } else {
+                signal = null;
+            }
+
+            if (signal) {
+                return this.emit(signal, event);
+            }
+            return retval;
+        },
+
+/**
+ * clutter_actor_set_reactive:
+ * @actor: a #ClutterActor
+ * @reactive: whether the actor should be reactive to events
+ *
+ * Sets @actor as reactive. Reactive actors will receive events.
+ *
+ * Since: 0.6
+ */
+        set reactive(reactive) {
+            if (reactive === this.reactive) return;
+
+            if (reactive) {
+                this.flags |= ActorFlags.REACTIVE;
+            } else {
+                this.flags &= (~ActorFlags.REACTIVE);
+            }
+            this.notify('reactive');
+        },
+
+/**
+ * clutter_actor_get_reactive:
+ * @actor: a #ClutterActor
+ *
+ * Checks whether @actor is marked as reactive.
+ *
+ * Return value: %TRUE if the actor is reactive
+ *
+ * Since: 0.6
+ */
+        get reactive() { return !!(this.flags & ActorFlags.REACTIVE); },
 
         _get_stage_internal: function() {
             var actor = this;
