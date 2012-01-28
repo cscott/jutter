@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define(["./color", "./dom", "./group"], function(Color, Dom, Group) {
     /** A 'Stage' is a top-level window on which child actors are placed
      *  and manipulated.  In jutter, a Stage corresponds to a WebGL canvas.
@@ -38,7 +44,7 @@ define(["./color", "./dom", "./group"], function(Color, Dom, Group) {
         },
         color: {
             get: function() { return this._color; },
-            set: function() { this._color = color; }
+            set: function(color) { this._color = color; }
         },
         title: {
             get: function() {

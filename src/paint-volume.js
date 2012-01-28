@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define(["./vertex"], function(Vertex) {
 
     var PaintVolumeFlags = {
@@ -51,8 +57,10 @@ define(["./vertex"], function(Vertex) {
              */
             this.vertices = [null,null,null,null,
                              null,null,null,null];
-            for (var i=0; i<this.vertices.length; i++)
+            var i;
+            for (i=0; i<this.vertices.length; i++) {
                 this.vertices[i] = new Vertex(0,0,0);
+            }
 
             this.flags = PaintVolumeFlags.DEFAULT_FLAGS;
 
@@ -60,8 +68,10 @@ define(["./vertex"], function(Vertex) {
         },
         /** Zero out paint volume. */
         init: function() {
-            for (var i=0; i<this.vertices.length; i++)
+            var i;
+            for (i=0; i<this.vertices.length; i++) {
                 this.vertices[i].init();
+            }
             this.flags = PaintVolumeFlags.DEFAULT_FLAGS;
         },
         /* A newly initialized PaintVolume is considered empty as it is
@@ -154,8 +164,10 @@ define(["./vertex"], function(Vertex) {
         set_from_volume: function(pv) {
             this.actor = pv.actor;
             this.flags = pv.flags;
-            for (var i=0; i<pv.vertices.length; i++)
+            var i;
+            for (i=0; i<pv.vertices.length; i++) {
                 this.vertices[i].set_from_vertex(pv.vertices[i]);
+            }
         },
         /**
          * clutter_paint_volume_set_origin:
@@ -178,7 +190,8 @@ define(["./vertex"], function(Vertex) {
 
             /* If we change the origin then all the key vertices of the paint
              * volume need to be shifted too... */
-            for (var i = 0; i < 4; i++) {
+            var i;
+            for (i = 0; i < 4; i++) {
                 this.vertices[KEY_VERTICES[i]].x += dx;
                 this.vertices[KEY_VERTICES[i]].y += dy;
                 this.vertices[KEY_VERTICES[i]].z += dz;
@@ -228,8 +241,9 @@ define(["./vertex"], function(Vertex) {
                 this.vertices[4].set_from_vertex(this.vertices[0]);
             }
 
-            if (!this.is_axis_aligned)
+            if (!this.is_axis_aligned) {
                 this._axis_align();
+            }
 
             var right_xpos = this.vertices[0].x + width;
 
@@ -306,8 +320,9 @@ define(["./vertex"], function(Vertex) {
                 this.vertices[4].set_from_vertex(this.vertices[0]);
             }
 
-            if (!this.is_axis_aligned)
+            if (!this.is_axis_aligned) {
                 this._axis_align();
+            }
 
             var height_ypos = this.vertices[0].y + height;
 
@@ -383,8 +398,9 @@ define(["./vertex"], function(Vertex) {
                 this.vertices[4].set_from_vertex(this.vertices[0]);
             }
 
-            if (!this.is_axis_aligned)
+            if (!this.is_axis_aligned) {
                 this._axis_align();
+            }
 
             var depth_zpos = this.vertices[0].z + depth;
 
@@ -467,16 +483,18 @@ define(["./vertex"], function(Vertex) {
              * calculating a bounding box that would enclose the origin of
              * the empty volume which isn't desired.
              */
-            if (another_pv.is_empty)
+            if (another_pv.is_empty) {
                 return;
+            }
 
             if (this.is_empty) {
                 this.set_from_volume(another_pv);
                 return;
             }
 
-            if (!this.is_axis_aligned)
+            if (!this.is_axis_aligned) {
                 this._axis_align();
+            }
 
             if (!another_pv.is_axis_aligned) {
                 another_pv = another_pv.copy();
@@ -543,10 +561,11 @@ define(["./vertex"], function(Vertex) {
                 /* this.vertices[7].z = maz_z; */
             }
 
-            if (this.vertices[4].z === this.vertices[0].z)
+            if (this.vertices[4].z === this.vertices[0].z) {
                 this.is_2d = true;
-            else
+            } else {
                 this.is_2d = false;
+            }
 
             this.is_empty = false;
             this.is_complete = false;
@@ -558,11 +577,13 @@ define(["./vertex"], function(Vertex) {
          * This will set pv->completed = TRUE;
          */
         _complete: function() {
-            if (this.is_empty)
+            if (this.is_empty) {
                 return;
+            }
 
-            if (this.is_complete)
+            if (this.is_complete) {
                 return;
+            }
 
             /* Find the vector that takes us from any vertex on the left face to
              * the corresponding vertex on the right face. */
@@ -641,21 +662,24 @@ define(["./vertex"], function(Vertex) {
 
             /* Most actors are 2D so we only have to look at the front 4
              * vertices of the paint volume... */
-            if (this.is_2d)
+            if (this.is_2d) {
                 count = 4;
-            else
+            } else {
                 count = 8;
+            }
 
             for (i = 1; i < count; i++) {
-                if (vertices[i].x < x_min)
+                if (vertices[i].x < x_min) {
                     x_min = vertices[i].x;
-                else if (vertices[i].x > x_max)
+                } else if (vertices[i].x > x_max) {
                     x_max = vertices[i].x;
+                }
 
-                if (vertices[i].y < y_min)
+                if (vertices[i].y < y_min) {
                     y_min = vertices[i].y;
-                else if (vertices[i].y > y_max)
+                } else if (vertices[i].y > y_max) {
                     y_max = vertices[i].y;
+                }
             }
 
             box.x1 = x_min;
@@ -673,11 +697,13 @@ define(["./vertex"], function(Vertex) {
             var origin;
             var max_x, max_y, max_z;
 
-            if (this.is_empty)
+            if (this.is_empty) {
                 return;
+            }
 
-            if (this.is_axis_aligned)
+            if (this.is_axis_aligned) {
                 return;
+            }
 
             if (this.vertices[0].x === this.vertices[1].x &&
                 this.vertices[0].y === this.vertices[3].y &&
@@ -686,8 +712,9 @@ define(["./vertex"], function(Vertex) {
                 return;
             }
 
-            if (!this.is_complete)
+            if (!this.is_complete) {
                 this._complete();
+            }
 
             origin = this.vertices[0].copy();
             max_x = this.vertices[0].x;
@@ -696,20 +723,23 @@ define(["./vertex"], function(Vertex) {
 
             count = this.is_2d ? 4 : 8;
             for (i = 1; i < count; i++) {
-                if (this.vertices[i].x < origin.x)
+                if (this.vertices[i].x < origin.x) {
                     origin.x = this.vertices[i].x;
-                else if (this.vertices[i].x > max_x)
+                } else if (this.vertices[i].x > max_x) {
                     max_x = this.vertices[i].x;
+                }
 
-                if (this.vertices[i].y < origin.y)
+                if (this.vertices[i].y < origin.y) {
                     origin.y = this.vertices[i].y;
-                else if (this.vertices[i].y > max_y)
+                } else if (this.vertices[i].y > max_y) {
                     max_y = this.vertices[i].y;
+                }
 
-                if (this.vertices[i].z < origin.z)
+                if (this.vertices[i].z < origin.z) {
                     origin.z = this.vertices[i].z;
-                else if (this.vertices[i].z > max_z)
+                } else if (this.vertices[i].z > max_z) {
                     max_z = this.vertices[i].z;
+                }
             }
 
             this.vertices[0].set_from_vertex(origin);
@@ -729,10 +759,11 @@ define(["./vertex"], function(Vertex) {
             this.is_complete = false;
             this.is_axis_aligned = true;
 
-            if (this.vertices[4].z === this.vertices[0].z)
+            if (this.vertices[4].z === this.vertices[0].z) {
                 this.is_2d = true;
-            else
+            } else {
                 this.is_2d = false;
+            }
         }
     };
     return PaintVolume;

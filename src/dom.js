@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false, document:false, window:false */
+'use strict';
 define([], function() {
     /** Export a limited set of functions for working with the DOM.
      *  These can be reimplemented for a standalone application.
@@ -14,24 +20,26 @@ define([], function() {
               ["content", "black"]]
         ];
         var m = window.document.getElementsByTagName("meta");
-        for (var i=0; i<elements.length; i++) {
+        var i, j, k;
+        for (i=0; i<elements.length; i++) {
             var e = elements[i];
             // does this already exist?
             var exist = false;
-            for (var j=0; j<m.length && !exist; j++) {
+            for (j=0; j<m.length && !exist; j++) {
                 var mm = m[j];
                 var match = true;
-                for (var k=0; k<e.length && match; k++) {
+                for (k=0; k<e.length && match; k++) {
                     var a = e[k][0];
                     var v = e[k][1];
-                    if (mm.getAttribute(a) !== v)
+                    if (mm.getAttribute(a) !== v) {
                         match = false;
+                    }
                 }
-                if (match) exist=true;
+                if (match) { exist=true; }
             }
-            if (exist) continue;
+            if (exist) { continue; }
             var meta = document.createElement("meta");
-            for (var k=0; k<e.length; k++) {
+            for (k=0; k<e.length; k++) {
                 meta.setAttribute(e[k][0], e[k][1]);
             }
             window.document.head.appendChild(meta);

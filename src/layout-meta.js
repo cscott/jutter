@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define(["./child-meta"], function(ChildMeta) {
 
     var LayoutMeta = function(manager, container, actor) {

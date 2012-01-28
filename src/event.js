@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define([], function() {
 
 /**
@@ -57,8 +63,9 @@ define([], function() {
                 this.type === Type.BUTTON_PRESS ||
                 this.type === Type.BUTTON_RELEASE ||
                 this.type === Type.MOTION ||
-                this.type === Type.SCROLL)
+                this.type === Type.SCROLL) {
                 return this.modifier_state;
+            }
             return 0;
         },
         set state(state) {
@@ -67,8 +74,9 @@ define([], function() {
                 this.type === Type.BUTTON_PRESS ||
                 this.type === Type.BUTTON_RELEASE ||
                 this.type === Type.MOTION ||
-                this.type === Type.SCROLL)
+                this.type === Type.SCROLL) {
                 this.modifier_state = state;
+            }
         },
         get coords() {
             if (this.type === Type.ENTER ||
@@ -76,8 +84,9 @@ define([], function() {
                 this.type === Type.BUTTON_PRESS ||
                 this.type === Type.BUTTON_RELEASE ||
                 this.type === Type.MOTION ||
-                this.type === Type.SCROLL)
+                this.type === Type.SCROLL) {
                 return [this.x, this.y];
+            }
             return [0,0];
         },
         set coords(c) {
@@ -96,8 +105,8 @@ define([], function() {
             return this._flags;
         },
         set flags(flags) {
-            if (this._flags === flags) return;
-            this._flags = flags | Flag.SYNTHETIC;
+            if (this._flags === flags) { return; }
+            this._flags = flags | Flags.SYNTHETIC;
         }
     };
     Event.Flags = Flags;

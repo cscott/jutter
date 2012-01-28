@@ -1,3 +1,8 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
 /*
  * Copyright (c) 2008  litl, LLC
  *
@@ -19,6 +24,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+'use strict';
 define([], function() {
 
 // A couple principals of this simple signal system:
@@ -28,10 +34,13 @@ define([], function() {
 //    connections, but they may be to different signal names
 
 function _connect(name, callback, run_last) {
+    /*jshint validthis:true */
+
     // be paranoid about callback arg since we'd start to throw from emit()
     // if it was messed up
-    if (typeof(callback) != 'function')
+    if (typeof(callback) !== 'function') {
         throw new Error("When connecting signal must give a callback that is a function");
+    }
 
     // we instantiate the "signal machinery" only on-demand if anything
     // gets connected.
@@ -55,21 +64,25 @@ function _connect(name, callback, run_last) {
     return id;
 }
 function _connect_first(name, callback) {
+    /*jshint validthis:true */
     return _connect.call(this, name, callback, true);
 }
 function _connect_last(name, callback) {
+    /*jshint validthis:true */
     return _connect.call(this, name, callback, false);
 }
 
 function _disconnect(id) {
+    /*jshint validthis:true */
     if ('_signalConnections' in this) {
         var i;
         var length = this._signalConnections.length;
         for (i = 0; i < length; ++i) {
             var connection = this._signalConnections[i];
-            if (connection.id == id) {
-                if (connection.disconnected)
+            if (connection.id === id) {
+                if (connection.disconnected) {
                     throw new Error("Signal handler id " + id + " already disconnected");
+                }
 
                 // set a flag to deal with removal during emission
                 connection.disconnected = true;
@@ -83,6 +96,7 @@ function _disconnect(id) {
 }
 
 function _disconnectAll() {
+    /*jshint validthis:true */
     if ('_signalConnections' in this) {
         while (this._signalConnections.length > 0) {
             _disconnect.call(this, this._signalConnections[0].id);
@@ -97,6 +111,7 @@ var NO_RECURSE=  1 << 3;
 var NO_HOOKS=    1 << 4;
 
 function _emit(name /* , arg1, arg2 */) {
+    /*jshint validthis:true */
     // may not be any signal handlers at all, if not then return
     var _signalConnections;
     if ('_signalConnections' in this) {
@@ -112,11 +127,12 @@ function _emit(name /* , arg1, arg2 */) {
     // at emission start; and just before invoking each
     // handler we check its disconnected flag.
     var handlers = [];
-    var i;
+    var i, j;
     var length = _signalConnections.length;
+    var connection;
     for (i = 0; i < length; ++i) {
-        var connection = _signalConnections[i];
-        if (connection.name == name) {
+        connection = _signalConnections[i];
+        if (connection.name === name) {
             handlers.push(connection);
         }
     }
@@ -149,50 +165,53 @@ function _emit(name /* , arg1, arg2 */) {
     if (cont && closure && (flags & RUN_FIRST)) {
         try {
             cont = !closure.apply(this, arg_array);
-        } catch (e) {
-            console.error("Exception in class closure for signal: "+name, e);
+        } catch (e1) {
+            console.error("Exception in class closure for signal: "+name, e1);
         }
     }
 
     length = handlers.length;
     for (j = 0; cont && j < 2; ++j) {
         for (i = 0; cont && i < length; ++i) {
-            var connection = handlers[i];
-            if (connection.disconnected)
+            connection = handlers[i];
+            if (connection.disconnected) {
                 continue;
-            if ((j===0) !== !connection.run_last)
+            }
+            if ((j===0) !== (!connection.run_last)) {
                 continue;
+            }
             try {
                 // if the callback returns true, we don't call the next
                 // signal handlers
                 cont = !connection.callback.apply(this, arg_array);
 
-            } catch(e) {
+            } catch(e2) {
                 // just log any exceptions so that callbacks can't disrupt
                 // signal emission
-                console.error("Exception in callback for signal: "+name, e);
+                console.error("Exception in callback for signal: "+name, e2);
             }
         }
     }
     if (cont && closure && (flags & RUN_LAST)) {
         try {
             cont = !closure.apply(this, arg_array);
-        } catch (e) {
-            console.error("Exception in class closure for signal: "+name, e);
+        } catch (e3) {
+            console.error("Exception in class closure for signal: "+name, e3);
         }
     }
 
     if (closure && (flags & RUN_CLEANUP)) {
         try {
             cont = !closure.apply(this, arg_array);
-        } catch (e) {
-            console.error("Exception in class closure for signal: "+name, e);
+        } catch (e4) {
+            console.error("Exception in class closure for signal: "+name, e4);
         }
     }
     return !cont; // true means "handled"
 }
 
 function _notify(propname) {
+    /*jshint validthis:true */
     if (this._notifications && this._notifications.frozen > 0) {
         if (this._notifications.props.indexOf(propname) === -1) {
             this._notifications.props.push(propname);
@@ -202,12 +221,14 @@ function _notify(propname) {
     this.emit('notify', propname, this[propname]);
 }
 function _freeze_notify() {
+    /*jshint validthis:true */
     if (!this._notifications) {
         this._notifications = { frozen: 0, props: [] };
     }
     this._notifications.frozen += 1;
 }
 function _thaw_notify() {
+    /*jshint validthis:true */
     console.assert(this._notifications);
     this._notifications.frozen -= 1;
     if (this._notifications.frozen > 0) {
@@ -216,7 +237,8 @@ function _thaw_notify() {
     var props = this._notifications.props;
     delete this._notifications;
 
-    for (var i=0; i<props.length; i++) {
+    var i;
+    for (i=0; i<props.length; i++) {
         this.emit('notify', props[i], this[props[i]]);
     }
 }
@@ -234,15 +256,16 @@ function addSignalMethods(proto) {
 }
 
 function register(proto, signals) {
-    var props;
+    var props, key;
     for (key in signals) {
-        if (!signals.hasOwnProperty(key)) continue;
-        props = signals[key];
-        if ('flags' in props) {
-            proto['_signalFlags-'+key] = props.flags;
-        }
-        if ('closure' in props) {
-            proto['_signalClosure-'+key] = props.closure;
+        if (signals.hasOwnProperty(key)) {
+            props = signals[key];
+            if ('flags' in props) {
+                proto['_signalFlags-'+key] = props.flags;
+            }
+            if ('closure' in props) {
+                proto['_signalClosure-'+key] = props.closure;
+            }
         }
     }
 }

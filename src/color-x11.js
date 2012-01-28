@@ -1,4 +1,10 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
 /** @namespace */
+'use strict';
 define([], function() {
     var make_color_table = function(Color) {
         return {

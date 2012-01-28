@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define(["./layout-manager"], function(LayoutManager) {
 
 /**
@@ -25,6 +31,7 @@ define(["./layout-manager"], function(LayoutManager) {
                 var natural_right = 0;
                 var child;
                 var child_x, child_min, child_natural;
+                var r;
 
                 for (child = actor.first_child;
                      child;
@@ -35,11 +42,13 @@ define(["./layout-manager"], function(LayoutManager) {
                     child_min = r.min_width;
                     child_natural = r.natural_width;
 
-                    if (child_x + child_min > min_right)
+                    if (child_x + child_min > min_right) {
                         min_right = child_x + child_min;
+                    }
 
-                    if (child_x + child_natural > natural_right)
+                    if (child_x + child_natural > natural_right) {
                         natural_right = child_x + child_natural;
+                    }
                 }
 
                 return {
@@ -54,6 +63,7 @@ define(["./layout-manager"], function(LayoutManager) {
                 var natural_bottom = 0;
                 var child;
                 var child_y, child_min, child_natural;
+                var r;
 
                 for (child = actor.first_child;
                      child;
@@ -64,11 +74,13 @@ define(["./layout-manager"], function(LayoutManager) {
                     child_min = r.min_height;
                     child_natural = r.natural_height;
 
-                    if (child_y + child_min > min_bottom)
+                    if (child_y + child_min > min_bottom) {
                         min_bottom = child_y + child_min;
+                    }
 
-                    if (child_y + child_natural > natural_bottom)
+                    if (child_y + child_natural > natural_bottom) {
                         natural_bottom = child_y + child_natural;
+                    }
                 }
 
                 return {
@@ -101,8 +113,9 @@ define(["./layout-manager"], function(LayoutManager) {
                     container.no_layout = true;
                 } else {
                     var old_container = this._container;
-                    if (old_container)
+                    if (old_container) {
                         old_container.no_layout = false;
+                    }
                     this._container = null;
                 }
                 // Chain to superclass.

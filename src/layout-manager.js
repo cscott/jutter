@@ -1,4 +1,10 @@
-define(["./child-meta", "./layout-meta", "./note", "./signals"], function(ChildMeta, LayoutMeta, Note, Signals) {
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
+define(["./actor", "./child-meta", "./layout-meta", "./note", "./signals"], function(Actor, ChildMeta, LayoutMeta, Note, Signals) {
     var QUARK_LAYOUT_META = 'clutter-layout-manager-child-meta';
     var QUARK_LAYOUT_ALPHA = 'clutter-layout-manager-alpha';
 
@@ -31,7 +37,7 @@ define(["./child-meta", "./layout-meta", "./note", "./signals"], function(ChildM
             console.assert(level > 0);
             Note.LAYOUT("Thawing changes for manager", this);
             level -= 1;
-            if (level == 0) {
+            if (level === 0) {
                 delete this.freeze_change;
             } else {
                 this.freeze_change = level;
@@ -111,10 +117,10 @@ define(["./child-meta", "./layout-meta", "./note", "./signals"], function(ChildM
             container._layout_manager = this;
         },
         create_child_meta: function(container, actor) {
-            var meta_type = this.child_meta_type;
+            var MetaType = this.child_meta_type;
             /* provide a default implementation to reduce common code */
-            if (meta_type) {
-                return new meta_type(this, container, actor);
+            if (MetaType) {
+                return new MetaType(this, container, actor);
             }
             return null;
         },
@@ -135,8 +141,9 @@ define(["./child-meta", "./layout-meta", "./note", "./signals"], function(ChildM
 
                 if (layout.manager === this &&
                     child.container === container &&
-                    child.actor === actor)
+                    child.actor === actor) {
                     return layout;
+                }
 
                 /* if the LayoutMeta referenced is not attached to the
                  * layout manager then we simply ask the layout manager

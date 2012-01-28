@@ -1,3 +1,8 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true
+ */
+/*global define:false, console:false */
 define(["../src/clutter"], function(Clutter) {
 
 var Calculator = function(args) {

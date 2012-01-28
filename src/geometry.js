@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define([], function() {
     /** ClutterGeometry */
 
@@ -34,12 +40,13 @@ define([], function() {
         }
     };
     Geometry.copy = function(g) {
-        if (g)
+        if (g) {
             g = g.copy();
+        }
         return g;
     };
     Geometry.equals = function(a, b) {
-        if (a === b) return true;
+        if (a === b) { return true; }
 
         return a.x === b.x && a.y === b.y &&
             a.width === b.width && a.height === b.height;
@@ -84,8 +91,9 @@ define([], function() {
         if (b.x >= (a.x + a.width) ||
             b.y >= (a.y + a.height) ||
             (b.x + b.width) <= a.x ||
-            (b.y + b.height) <= a.y)
+            (b.y + b.height) <= a.y) {
             return false;
+        }
         return true;
     };
 

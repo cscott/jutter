@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 /** @namespace */
 define(['./color-x11'], function(X11) {
     /**
@@ -43,8 +49,9 @@ define(['./color-x11'], function(X11) {
         to_string: function() {
             function x2(n) {
                 var s = n.toString(16);
-                while (s.length < 2)
+                while (s.length < 2) {
                     s = '0' + s;
+                }
                 return s;
             }
             return '#'+x2(this.red)+x2(this.green)+x2(this.blue)+x2(this.alpha);
@@ -57,9 +64,9 @@ define(['./color-x11'], function(X11) {
          * @saturation values are in the 0 .. 1 range.
          */
         to_hls: function() {
-            var r = this.red/255.;
-            var g = this.green/255.;
-            var b = this.blue/255.;
+            var r = this.red/255.0;
+            var g = this.green/255.0;
+            var b = this.blue/255.0;
 
             var maxc = max(max(r, g), b);
             var minc = min(min(r, g), b);
@@ -87,8 +94,9 @@ define(['./color-x11'], function(X11) {
 
                 h *= 60;
 
-                if (h < 0)
+                if (h < 0) {
                     h += 360;
+                }
             }
 
             return [h,l,s];
@@ -124,10 +132,11 @@ define(['./color-x11'], function(X11) {
             return this.shade(0.7);
         },
         shade: function(factor) {
+            var i;
             var hls = this.to_hls();
             hls[1] *= factor;
             hls[2] *= factor;
-            for (var i=1; i<3; i++) {
+            for (i=1; i<3; i++) {
                 hls[i] = (hls[i] > 1) ? 1 : (hls[i] < 0) ? 0 : hls[i];
             }
             return Color.from_hls(hls[0], hls[1], hls[2], this.alpha);
@@ -135,10 +144,10 @@ define(['./color-x11'], function(X11) {
     };
     /** Make X11-style named color table. */
     var _x11_color_table = X11.make_color_table(Color);
-    var _color_re = /\(\s*([-+]?\d*\.?\d+)\s*(%\s*)?,\s*([-+]?\d*\.?\d+)\s*(%\s*)?,\s*([-+]?\d*\.?\d+)\s*(%\s*)?(,\s*([-+]?\d*\.?\d+)\s*(%\s*)?)?\)/;
+    var _color_re = /\(\s*([\-+]?\d*\.?\d+)\s*(%\s*)?,\s*([\-+]?\d*\.?\d+)\s*(%\s*)?,\s*([\-+]?\d*\.?\d+)\s*(%\s*)?(,\s*([\-+]?\d*\.?\d+)\s*(%\s*)?)?\)/;
     var parse_rgba = function(str, has_alpha) {
         var m = str.trim().match(_color_re);
-        if (!m) return null;
+        if (!m) { return null; }
         var red = parseFloat(m[1]);
         if (m[2]) { red = (red/100) * 255; }
         var green = parseFloat(m[3]);
@@ -147,7 +156,7 @@ define(['./color-x11'], function(X11) {
         if (m[6]) { blue = (blue/100) * 255; }
         var alpha = 255;
         if (has_alpha) {
-            if (!m[7]) return null;
+            if (!m[7]) { return null; }
             alpha = parseFloat(m[8]);
             if (m[9]) { alpha = alpha/100; }
             alpha *= 255;
@@ -159,7 +168,7 @@ define(['./color-x11'], function(X11) {
     };
     var parse_hsla = function(str, has_alpha) {
         var m = str.trim().match(_color_re);
-        if (!m) return null;
+        if (!m) { return null; }
 
         var h = parseFloat(m[1]);
         if (m[2]) { h = (h/100) * 360; }
@@ -175,7 +184,7 @@ define(['./color-x11'], function(X11) {
 
         var alpha = 255;
         if (has_alpha) {
-            if (!m[7]) return null;
+            if (!m[7]) { return null; }
             alpha = parseFloat(m[8]);
             if (m[9]) { alpha = alpha/100; }
             alpha *= 255;
@@ -185,26 +194,27 @@ define(['./color-x11'], function(X11) {
         return Color.from_hls(h, l, s, alpha);
     };
     var parse_hex_color = function(str) {
+        var red, green, blue, alpha;
         var r = parseInt(str, 16);
-        if (r !== r) return null; /* NaN */
+        if (r !== r) { return null; /* NaN */ }
         if (str.length === 8) {
             /* rrggbbaa */
             return Color.from_pixel(r);
-        } else if (str.length == 6) {
+        } else if (str.length === 6) {
             /* rrggbb */
             return Color.from_pixel((r<<8)|0xFF);
-        } else if (str.length == 4) {
+        } else if (str.length === 4) {
             /* rgba */
-            var red = (r>>12) & 0xF;
-            var green=(r>> 8) & 0xF;
-            var blue =(r>> 4) & 0xF;
-            var alpha=(r    ) & 0xF;
+            red = (r>>12) & 0xF;
+            green=(r>> 8) & 0xF;
+            blue =(r>> 4) & 0xF;
+            alpha=(r    ) & 0xF;
             return new Color(red*0x11, green*0x11, blue*0x11, alpha*0x11);
-        } else if (str.length == 3) {
+        } else if (str.length === 3) {
             /* rgb */
-            var red = (r>> 8) & 0xF;
-            var green=(r>> 4) & 0xF;
-            var blue =(r    ) & 0xF;
+            red = (r>> 8) & 0xF;
+            green=(r>> 4) & 0xF;
+            blue =(r    ) & 0xF;
             return new Color(red*0x11, green*0x11, blue*0x11, 255);
         }
         return null; /* can't parse it */
@@ -267,13 +277,15 @@ define(['./color-x11'], function(X11) {
      */
     Color.from_string = function(str) {
         if (str.substr(0,3)==='rgb') {
-            if (str.substr(0,4)==='rgba')
+            if (str.substr(0,4)==='rgba') {
                 return parse_rgba(str.substr(4), true);
+            }
             return parse_rgba(str.substr(3), false);
         }
         if (str.substr(0,3)==='hsl') {
-            if (str.substr(0,4)==='hsla')
+            if (str.substr(0,4)==='hsla') {
                 return parse_hsla(str.substr(4), true);
+            }
             return parse_hsla(str.substr(3), false);
         }
         if (str.substr(0,1)==='#') {
@@ -308,8 +320,9 @@ define(['./color-x11'], function(X11) {
      * values into a #Color.
      */
     Color.from_hls = function(hue, luminance, saturation, alpha) {
-        if (alpha === undefined)
+        if (alpha === undefined) {
             alpha = 255;
+        }
 
         hue /= 360.0;
 
@@ -319,10 +332,11 @@ define(['./color-x11'], function(X11) {
         }
 
         var tmp2;
-        if (luminance <= 0.5)
+        if (luminance <= 0.5) {
             tmp2 = luminance * (1.0 + saturation);
-        else
+        } else {
             tmp2 = luminance + saturation - (luminance * saturation);
+        }
 
         var tmp1 = 2.0 * luminance - tmp2;
 
@@ -332,22 +346,26 @@ define(['./color-x11'], function(X11) {
             hue - 1.0 / 3.0 ];
         var clr = [0,0,0];
 
-        for (var i = 0; i < 3; i++) {
-            if (tmp3[i] < 0)
+        var i;
+        for (i = 0; i < 3; i++) {
+            if (tmp3[i] < 0) {
                 tmp3[i] += 1.0;
+            }
 
-            if (tmp3[i] > 1)
+            if (tmp3[i] > 1) {
                 tmp3[i] -= 1.0;
+            }
 
 
-            if (6.0 * tmp3[i] < 1.0)
+            if (6.0 * tmp3[i] < 1.0) {
                 clr[i] = tmp1 + (tmp2 - tmp1) * tmp3[i] * 6.0;
-            else if (2.0 * tmp3[i] < 1.0)
+            } else if (2.0 * tmp3[i] < 1.0) {
                 clr[i] = tmp2;
-            else if (3.0 * tmp3[i] < 2.0)
+            } else if (3.0 * tmp3[i] < 2.0) {
                 clr[i] = (tmp1 + (tmp2 - tmp1) * ((2.0 / 3.0) - tmp3[i]) * 6.0);
-            else
+            } else {
                 clr[i] = tmp1;
+            }
         }
 
         return new Color(Math.round(clr[0]*255),
@@ -361,7 +379,7 @@ define(['./color-x11'], function(X11) {
      * Return value: %TRUE if the two colors are the same.
      */
     Color.equal = function(a, b) {
-        if (a === b) return true;
+        if (a === b) { return true; }
 
         return (a.red   === b.red   &&
                 a.green === b.green &&

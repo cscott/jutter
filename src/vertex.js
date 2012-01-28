@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define([], function() {
     /** ClutterVertex */
 
@@ -47,12 +53,11 @@ define([], function() {
         }
     };
     Vertex.copy = function(v) {
-        if (v)
-            v = v.copy();
+        if (v) { v = v.copy(); }
         return v;
     };
     Vertex.equals = function(a, b) {
-        if (a === b) return true;
+        if (a === b) { return true; }
 
         return a.x === b.x && a.y === b.y && a.z === b.z;
     };

@@ -1,3 +1,9 @@
+/*jshint
+  eqeqeq:true, curly:true, latedef:true, newcap:true, undef:true,
+  trailing:true, es5:true, globalstrict:true
+ */
+/*global define:false, console:false */
+'use strict';
 define(["./color", "./context", "./event", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Event, Note, PaintVolume, Signals, Vertex) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
@@ -22,7 +28,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
         REALIZED:  1 << 2,
         REACTIVE:  1 << 3,
         VISIBLE:   1 << 4,
-        NO_LAYOUT: 1 << 5,
+        NO_LAYOUT: 1 << 5
     };
     Object.freeze(ActorFlags);
 
@@ -97,7 +103,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
     Object.freeze(ActorPrivateFlags);
 
     var PRIVATE = "_actor_private";
-    var ActorPrivate = function() { this._init(); }
+    var ActorPrivate = function() {
+        this._init();
+    };
     ActorPrivate.prototype = {
         _init: function() {
             this.flags = 0;
@@ -157,13 +165,13 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
         },
         get mapped() { return !!(this.flags & ActorFlags.MAPPED); },
         set mapped(mapped) {
-            if (this.mapped == mapped) return;
+            if (this.mapped === mapped) { return; }
             if (mapped) {
                 this.map();
             } else {
                 this.unmap();
             }
-            console.assert(this.mapped == mapped);
+            console.assert(this.mapped === mapped);
         },
         verify_map_state: function() {
             // DEBUGGING ONLY
@@ -218,8 +226,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                          * become pointless
                          */
                         while (iter) {
-                            if (iter[PRIVATE].enable_paint_unmapped)
+                            if (iter[PRIVATE].enable_paint_unmapped) {
                                 return;
+                            }
 
                             iter = iter[PRIVATE].parent;
                         }
@@ -264,8 +273,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                  * should be realized, and that it has to be visible to be
                  * mapped.
                  */
-                if (this.visible)
+                if (this.visible) {
                     this.realize();
+                }
 
                 if (change === MapState.CHECK) {
                     /* do nothing */
@@ -456,8 +466,8 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
  * Since: 1.0
  */
         map: function() {
-            if (this.mapped) return;
-            if (!this.visible) return;
+            if (this.mapped) { return; }
+            if (!this.visible) { return; }
 
             this.update_map_state(MapState.MAKE_MAPPED);
         },
@@ -483,12 +493,12 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
             /* relinquish keyboard focus if we were unmapped while owning it */
             if (!this[PRIVATE].toplevel) {
-                stage = this._get_stage_internal();
+                var stage = this._get_stage_internal();
                 if (stage) {
                     stage._release_pick_id(this[PRIVATE].pick_id);
                 }
                 this[PRIVATE].pick_id = -1;
-                if (stage && stage.key_focus == this) {
+                if (stage && stage.key_focus === this) {
                     stage.key_focus = null;
                 }
             }
@@ -513,7 +523,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
  * Since: 1.0
  */
         unmap: function() {
-            if (!this.mapped) return;
+            if (!this.mapped) { return; }
 
             this.update_map_state(MapState.MAKE_UNMAPPED);
         },
@@ -521,16 +531,16 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
         get visible() { return !!(this.flags & ActorFlags.VISIBLE); },
         set visible(visible) {
-            if (this.visible == visible) return;
+            if (this.visible === visible) { return; }
             if (visible) {
                 this.show();
             } else {
                 this.hide();
             }
-            console.assert(this.visible == visible);
+            console.assert(this.visible === visible);
         },
         real_show: function() {
-            if (this.visible) return;
+            if (this.visible) { return; }
 
             this.flags |= ActorFlags.VISIBLE;
 
@@ -563,8 +573,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
         set show_on_set_parent(set_show) {
             var priv = this[PRIVATE];
             set_show = !!set_show;
-            if (priv.show_on_set_parent === set_show)
+            if (priv.show_on_set_parent === set_show) {
                 return;
+            }
             if (!priv.parent) {
                 priv.show_on_set_parent = set_show;
                 this.notify('show_on_set_parent');
@@ -604,14 +615,15 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             this.notify('visible');
 
             var priv = this[PRIVATE];
-            if (priv.parent)
+            if (priv.parent) {
                 priv.parent.queue_redraw();
+            }
 
             this.thaw_notify();
         },
 
         real_hide: function() {
-            if (!this.visible) return;
+            if (!this.visible) { return; }
 
             this.flags &= (~ActorFlags.VISIBLE);
             /* we notify on the "visible" flag in the clutter_actor_hide()
@@ -663,8 +675,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             this.notify('visible');
 
             var priv = this[PRIVATE];
-            if (priv.parent)
+            if (priv.parent) {
                 priv.parent.queue_redraw();
+            }
 
             this.thaw_notify();
         },
@@ -692,14 +705,15 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
  **/
         realize: function() {
             this.verify_map_state();
-            if (this.realized) return;
+            if (this.realized) { return; }
 
             /* To be realized, our parent actors must be realized first.
              * This will only succeed if we're inside a toplevel.
              */
             var priv = this[PRIVATE];
-            if (priv.parent)
+            if (priv.parent) {
                 priv.parent.realize();
+            }
 
             if (priv.toplevel) {
                 /* toplevels can be realized at any time */
@@ -806,8 +820,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             var unrealize_before_children = function() {
                 /* If an actor is already unrealized we know its children have also
                  * already been unrealized... */
-                if (!this.realized)
+                if (!this.realized) {
                     return TraverseVisitFlags.SKIP_CHILDREN;
+                }
 
                 this.emit('unrealize');
 
@@ -855,15 +870,16 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
              * is merely visible (but not mapped), then that's fine, we can
              * leave it visible.
              */
-            if (was_mapped)
+            if (was_mapped) {
                 this.hide();
+            }
 
             console.assert(!this.mapped);
 
             /* unrealize self and all children */
             this._unrealize_not_hiding();
 
-            if (callback) callback.call(this);
+            if (callback) { callback.call(this); }
 
             if (was_visible) {
                 this.show(); /* will realize only if mapping implies it */
@@ -914,8 +930,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
         },
         _signal_queue_redraw: function(origin) {
             /* no point in queuing a redraw on a destroyed actor */
-            if (this[PRIVATE].in_destruction)
+            if (this[PRIVATE].in_destruction) {
                 return;
+            }
 
             /* NB: We can't bail out early here if the actor is hidden in case
              * the actor bas been cloned. In this case the clone will need to
@@ -931,8 +948,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                        origin || "same actor");
 
             /* no point in queuing a redraw on a destroyed actor */
-            if (this[PRIVATE].in_destruction)
+            if (this[PRIVATE].in_destruction) {
                 return;
+            }
 
             /* If the queue redraw is coming from a child then the actor has
                become dirty and any queued effect is no longer valid */
@@ -945,8 +963,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
              * to allow for a ClutterClone, but the appearance of the parent
              * won't change so we don't have to propagate up the hierarchy.
              */
-            if (!this.visible)
+            if (!this.visible) {
                 return;
+            }
 
             /* Although we could determine here that a full stage redraw
              * has already been queued and immediately bail out, we actually
@@ -957,8 +976,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
              */
             if (this[PRIVATE].propagated_one_redraw) {
                 var stage = this._get_stage_internal();
-                if (stage && stage._has_full_redraw_queued())
+                if (stage && stage._has_full_redraw_queued()) {
                     return;
+                }
             }
 
             this[PRIVATE].propagated_one_redraw = true;
@@ -977,8 +997,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             var priv = this[PRIVATE];
 
             /* no point in queueing a redraw on a destroyed actor */
-            if (priv.in_destruction)
+            if (priv.in_destruction) {
                 return;
+            }
 
             priv.needs_width_request  = true;
             priv.needs_height_request = true;
@@ -989,20 +1010,23 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             priv.height_requests = []; // XXX CSA ?
 
             /* We need to go all the way up the hierarchy */
-            if (priv.parent)
+            if (priv.parent) {
                 priv.parent._queue_only_relayout();
+            }
         },
 
         _queue_only_relayout: function() {
             var priv = this[PRIVATE];
 
-            if (priv.in_destruction)
+            if (priv.in_destruction) {
                 return;
+            }
 
             if (priv.needs_width_request &&
                 priv.needs_height_request &&
-                priv.needs_allocation)
+                priv.needs_allocation) {
                 return; /* save some cpu cycles */
+            }
 
             if (!priv.toplevel && priv.in_relayout) {
                 console.warn("The actor is currently inside an allocation "+
@@ -1033,7 +1057,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
         get no_layout() { return !!(this.flags & ActorFlags.NO_LAYOUT); },
         set no_layout(no_layout) {
-            if (no_layout === this.no_layout) return;
+            if (no_layout === this.no_layout) { return; }
 
             if (no_layout) {
                 this.flags |= ActorFlags.NO_LAYOUT;
@@ -1117,18 +1141,21 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
              */
 
             /* ignore queueing a redraw for actors being destroyed */
-            if (this[PRIVATE].in_destruction)
+            if (this[PRIVATE].in_destruction) {
                 return;
+            }
 
             var stage = this._get_stage_internal();
 
             /* Ignore queueing a redraw for actors not descended from a stage */
-            if (!stage)
+            if (!stage) {
                 return;
+            }
 
             /* ignore queueing a redraw on stages that are being destroyed */
-            if (stage[PRIVATE].in_destruction)
+            if (stage[PRIVATE].in_destruction) {
                 return;
+            }
 
             var pv;
             if (flags & RedrawFlags.CLIPPED_TO_ALLOCATION) {
@@ -1162,8 +1189,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
             /* If this is the first redraw queued then we can directly use the
                effect parameter */
-            if (!priv.is_dirty)
+            if (!priv.is_dirty) {
                 priv.effect_to_redraw = effect;
+            }
             /* Otherwise we need to merge it with the existing effect parameter */
             else if (effect) {
                 /* If there's already an effect then we need to use whichever is
@@ -1182,8 +1210,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                              l;
                              l = l.next) {
                             if (l.data === priv.effect_to_redraw ||
-                                l.data === effect)
+                                l.data === effect) {
                                 priv.effect_to_redraw = l.data;
+                            }
                         }
                     }
                 }
@@ -1276,15 +1305,17 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             for (iter = priv.first_child;
                  iter;
                  iter = iter[PRIVATE].next_sibling) {
-                if (iter[PRIVATE].z > child[PRIVATE].z)
+                if (iter[PRIVATE].z > child[PRIVATE].z) {
                     break;
+                }
             }
 
             if (iter) {
                 tmp = iter[PRIVATE].prev_sibling;
 
-                if (tmp)
+                if (tmp) {
                     tmp[PRIVATE].next_sibling = child;
+                }
 
                 /* Insert the node before the found one */
                 child[PRIVATE].prev_sibling = iter[PRIVATE].prev_sibling;
@@ -1293,19 +1324,22 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             } else {
                 tmp = this[PRIVATE].last_child;
 
-                if (tmp)
+                if (tmp) {
                     tmp[PRIVATE].next_sibling = child;
+                }
 
                 /* insert the node at the end of the list */
                 child[PRIVATE].prev_sibling = this[PRIVATE].last_child;
                 child[PRIVATE].next_sibling = null;
             }
 
-            if (!child[PRIVATE].prev_sibling)
+            if (!child[PRIVATE].prev_sibling) {
                 this[PRIVATE].first_child = child;
+            }
 
-            if (!child[PRIVATE].next_sibling)
+            if (!child[PRIVATE].next_sibling) {
                 this[PRIVATE].last_child = child;
+            }
         },
 
         _insert_child_at_index: function(child, index_) {
@@ -1316,8 +1350,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             if (index_ === 0) {
                 tmp = this[PRIVATE].first_child;
 
-                if (tmp)
+                if (tmp) {
                     tmp[PRIVATE].prev_sibling = child;
+                }
 
                 child[PRIVATE].prev_sibling = null;
                 child[PRIVATE].next_sibling = tmp;
@@ -1325,8 +1360,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                 // XXX CSA broken upstream (missing the ==n_children case)
                 tmp = this[PRIVATE].last_child;
 
-                if (tmp)
+                if (tmp) {
                     tmp[PRIVATE].next_sibling = child;
+                }
 
                 child[PRIVATE].prev_sibling = tmp;
                 child[PRIVATE].next_sibling = null;
@@ -1343,19 +1379,22 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
                         iter[PRIVATE].prev_sibling = child;
 
-                        if (tmp)
+                        if (tmp) {
                             tmp[PRIVATE].next_sibling = child;
+                        }
 
                         break;
                     }
                 }
             }
 
-            if (!child[PRIVATE].prev_sibling)
+            if (!child[PRIVATE].prev_sibling) {
                 this[PRIVATE].first_child = child;
+            }
 
-            if (!child[PRIVATE].next_sibling)
+            if (!child[PRIVATE].next_sibling) {
                 this[PRIVATE].last_child = child;
+            }
         },
 
         _insert_child_above: function(child, sibling) {
@@ -1363,8 +1402,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
             child[PRIVATE].parent = this;
 
-            if (!sibling)
+            if (!sibling) {
                 sibling = this[PRIVATE].last_child;
+            }
 
             child[PRIVATE].prev_sibling = sibling;
 
@@ -1373,19 +1413,22 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
                 child[PRIVATE].next_sibling = tmp;
 
-                if (tmp)
+                if (tmp) {
                     tmp[PRIVATE].prev_sibling = child;
+                }
 
                 sibling[PRIVATE].next_sibling = child;
             } else {
                 child[PRIVATE].next_sibling = null;
             }
 
-            if (!child[PRIVATE].prev_sibling)
+            if (!child[PRIVATE].prev_sibling) {
                 this[PRIVATE].first_child = child;
+            }
 
-            if (!child[PRIVATE].next_sibling)
+            if (!child[PRIVATE].next_sibling) {
                 this[PRIVATE].last_child = child;
+            }
         },
 
         _insert_child_below: function(child, sibling) {
@@ -1393,8 +1436,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
             child[PRIVATE].parent = this;
 
-            if (!sibling)
+            if (!sibling) {
                 sibling = this[PRIVATE].first_child;
+            }
 
             child[PRIVATE].next_sibling = sibling;
 
@@ -1403,19 +1447,22 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
 
                 child[PRIVATE].prev_sibling = tmp;
 
-                if (tmp)
+                if (tmp) {
                     tmp[PRIVATE].next_sibling = child;
+                }
 
                 sibling[PRIVATE].prev_sibling = child;
             } else {
                 child[PRIVATE].prev_sibling = null;
             }
 
-            if (!child[PRIVATE].prev_sibling)
+            if (!child[PRIVATE].prev_sibling) {
                 this[PRIVATE].first_child = child;
+            }
 
-            if (!child[PRIVATE].next_sibling)
+            if (!child[PRIVATE].next_sibling) {
                 this[PRIVATE].last_child = child;
+            }
         },
 
 /*< private >
@@ -1851,7 +1898,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
  * Since: 1.10
  */
         remove_all_children: function() {
-            if (this[PRIVATE].n_children === 0) return;
+            if (this[PRIVATE].n_children === 0) { return; }
 
             var iter = this[PRIVATE].first_child;
             while (iter) {
@@ -1962,8 +2009,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             console.assert(child !== sibling);
             console.assert((!sibling) || (sibling instanceof Actor));
 
-            if (sibling)
+            if (sibling) {
                 console.assert(sibling[PRIVATE].parent === this);
+            }
 
             /* we don't want to change the state of child, or emit signals, or
              * regenerate ChildMeta instances here, but we still want to follow
@@ -2001,8 +2049,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             console.assert(child !== sibling);
             console.assert((!sibling) || (sibling instanceof Actor));
 
-            if (sibling)
+            if (sibling) {
                 console.assert(sibling[PRIVATE].parent === this);
+            }
 
             /* see the comment in set_child_above_sibling() */
             this._remove_child_internal(child, 0);
@@ -2069,7 +2118,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
             }
 
             retval = this.emit('event', event);
-            if (retval) return retval;
+            if (retval) { return retval; }
 
             var signal = null;
             if (event.type === Event.Type.NOTHING) {
@@ -2114,7 +2163,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
  * Since: 0.6
  */
         set reactive(reactive) {
-            if (reactive === this.reactive) return;
+            if (reactive === this.reactive) { return; }
 
             if (reactive) {
                 this.flags |= ActorFlags.REACTIVE;
@@ -2169,8 +2218,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
  */
         grab_key_focus: function() {
             var stage = this._get_stage_internal();
-            if (stage)
+            if (stage) {
                 stage.set_key_focus(this);
+            }
         },
 
 /* _clutter_actor_traverse:
@@ -2204,11 +2254,13 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                                   current_depth) {
             var flags = 0;
 
-            if (before_children_cb)
+            if (before_children_cb) {
                 flags = before_children_cb.call(this, current_depth);
+            }
 
-            if (flags & TraverseVisitFlags.BREAK)
+            if (flags & TraverseVisitFlags.BREAK) {
                 return TraverseVisitFlags.BREAK;
+            }
 
             if (!(flags & TraverseVisitFlags.SKIP_CHILDREN)) {
                 var iter;
@@ -2220,8 +2272,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                                                  after_children_cb,
                                                  current_depth + 1);
 
-                    if (flags & TraverseVisitFlags.BREAK)
+                    if (flags & TraverseVisitFlags.BREAK) {
                         return TraverseVisitFlags.BREAK;
+                    }
                 }
             }
 
@@ -2248,6 +2301,7 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                 if (flags & TraverseVisitFlags.BREAK) {
                     break;
                 } else if (!(flags & TraverseVisitFlags.SKIP_CHILDREN)) {
+                    /*jshint loopfunc:true */
                     actor._foreach_child(function() {
                         queue.push(this);
                         return true;
@@ -2427,8 +2481,9 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
                 this.notify('background_color_set');
                 return;
             }
-            if (priv.bg_color_set && Color.equal(color, priv.bg_color))
+            if (priv.bg_color_set && Color.equal(color, priv.bg_color)) {
                 return;
+            }
 
             priv.bg_color = color.copy();
             priv.bg_color_set = true;
