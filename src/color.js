@@ -39,6 +39,15 @@ define(['./color-x11'], function(X11) {
         copy: function() {
             return new Color(this.red, this.green, this.blue, this.alpha);
         },
+        set: function(r, g, b, a) {
+            this.red =   r;
+            this.green = g;
+            this.blue =  b;
+            this.alpha = a;
+        },
+        set_from_color: function(c) {
+            this.set(c.red, c.green, c.blue, c.alpha);
+        },
         /**
          * Returns a textual specification of @color in the hexadecimal form
          * <literal>&num;rrggbbaa</literal>, where <literal>r</literal>,

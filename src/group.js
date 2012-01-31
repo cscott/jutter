@@ -29,16 +29,17 @@ define(["./actor", "./fixed-layout", "./signals"], function(Actor, FixedLayout, 
  *
  * Deprecated: 1.10: Use #ClutterActor instead.
  */
-    var Group = function() {
-        this._init();
+    var Group = function(params) {
+        this._init(params);
     };
     Group.prototype = Object.create(Actor.prototype, {
         _init: {
-            value: function() {
+            value: function(params) {
                 Actor.prototype._init.call(this); // superclass init
                 this[PRIVATE] = {};
                 this[PRIVATE].layout = new FixedLayout();
                 this.layout_manager = this[PRIVATE].layout;
+                this.set_props(params);
             }
         },
         real_get_preferred_width: {

@@ -4,12 +4,14 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./stage", "./vertex"], function(Actor, Color, Event, Geometry, PaintVolume, Stage, Vertex) {
+define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./rectangle", "./stage", "./vertex"], function(Actor, Color, Event, Geometry, PaintVolume, Rectangle, Stage, Vertex) {
 
     var init = function(args) {
+        console.log("In Clutter.init", args);
     };
 
     var main = function() {
+        console.log("In Clutter.main");
     };
 
     return {
@@ -18,6 +20,7 @@ define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./stag
         Event: Event,
         Geometry: Geometry,
         PaintVolume: PaintVolume,
+        Rectangle: Rectangle,
         Stage: Stage,
         Vertex: Vertex,
 

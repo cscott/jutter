@@ -154,14 +154,24 @@ define(["./color", "./context", "./event", "./note", "./paint-volume", "./signal
         }
     };
 
-    var Actor = function() {
-        this._init();
+    var Actor = function(params) {
+        this._init(params);
     };
     Actor.prototype = {
-        _init: function() {
+        _init: function(params) {
             this.flags = 0;
             this[PRIVATE] = new ActorPrivate();
             this[PRIVATE].id = Context.acquire_id(this);
+            this.set_props(params);
+        },
+        set_props: function(params) {
+            var key;
+            if (!params) { return; }
+            for (key in params) {
+                if (params.hasOwnProperty(key)) {
+                    this[key] = params[key];
+                }
+            }
         },
         get mapped() { return !!(this.flags & ActorFlags.MAPPED); },
         set mapped(mapped) {
