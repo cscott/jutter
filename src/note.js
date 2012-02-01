@@ -6,22 +6,23 @@
 'use strict';
 define([], function() {
     /** "note" functions -- uses console.log, but can be turned off. */
+    var make_logger = function (category) {
+        var prefix = '['+category+']';
+        return function() {
+            if (this.has_debug(category)) {
+                var args = Array.prototype.slice.call(arguments, 0);
+                args.unshift(prefix);
+                console.log.apply(console, args);
+            }
+        };
+    };
+
     // different log levels
     return {
-        ACTOR: function() {
-            var args = Array.prototype.slice.call(arguments, 0);
-            args.unshift("[ACTOR]");
-            console.log.apply(console, args);
-        },
-        LAYOUT: function() {
-            var args = Array.prototype.slice.call(arguments, 0);
-            args.unshift("[LAYOUT]");
-            console.log.apply(console, args);
-        },
-        PAINT: function() {
-            var args = Array.prototype.slice.call(arguments, 0);
-            args.unshift("[PAINT]");
-            console.log.apply(console, args);
-        },
+        has_debug: function(category) { return true; },
+        ACTOR: make_logger('ACTOR'),
+        LAYOUT: make_logger('LAYOUT'),
+        MISC: make_logger('MISC'),
+        PAINT: make_logger('PAINT')
     };
 });
