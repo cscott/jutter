@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./rectangle", "./stage", "./vertex"], function(Actor, Color, Event, Geometry, PaintVolume, Rectangle, Stage, Vertex) {
+define(["./actor", "./color", "./enums", "./event", "./geometry", "./paint-volume", "./rectangle", "./stage", "./vertex"], function(Actor, Color, Enums, Event, Geometry, PaintVolume, Rectangle, Stage, Vertex) {
 
     var init = function(args) {
         console.log("In Clutter.init", args);
@@ -14,7 +14,7 @@ define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./rect
         console.log("In Clutter.main");
     };
 
-    return {
+    var Clutter = {
         Actor: Actor,
         Color: Color,
         Event: Event,
@@ -22,9 +22,18 @@ define(["./actor", "./color", "./event", "./geometry", "./paint-volume", "./rect
         PaintVolume: PaintVolume,
         Rectangle: Rectangle,
         Stage: Stage,
-        Vertex: Vertex,
-
-        init: init,
-        main: main
+        Vertex: Vertex
     };
+    // transfer enumerations to the Clutter object.
+    var key;
+    for (key in Enums) {
+        if (Enums.hasOwnProperty(key)) {
+            Clutter[key] = Enums[key];
+        }
+    }
+    // Static methods.
+    Clutter.init = init;
+    Clutter.main = main;
+    //
+    return Clutter;
 });
