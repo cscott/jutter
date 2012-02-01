@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./color", "./context", "./enums", "./event", "./geometry", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Enums, Event, Geometry, Note, PaintVolume, Signals, Vertex) {
+define(["./color", "./context", "./enums", "./event", "./feature", "./geometry", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Enums, Event, Feature, Geometry, Note, PaintVolume, Signals, Vertex) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -1556,9 +1556,6 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
         get natural_height_set() {
             return !!this[PRIVATE].natural_height_set;
         },
-        get request_mode() {
-            return this[PRIVATE].request_mode;
-        },
         get allocation() {
             return this[PRIVATE].allocation; //XXX CSA: .copy()?
         },
@@ -2026,6 +2023,7 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
         get_preferred_width: function(for_height) {
             var priv = this[PRIVATE];
             var info = this._get_layout_info_or_defaults ();
+            if (for_height < 0) { for_height=null; }
 
             /* we shortcircuit the case of a fixed size set using set_width() */
             if (priv.min_width_set && priv.natural_width_set) {
@@ -2057,7 +2055,7 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
             }
             if (!cached_size_request.valid) {
                 /* adjust for the margin */
-                if (for_height >= 0) {
+                if (for_height !== null && for_height >= 0) {
                     for_height -= (info.margin.top + info.margin.bottom);
                     if (for_height < 0) {
                         for_height = 0;
@@ -2130,6 +2128,7 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
         get_preferred_height: function(for_width) {
             var priv = this[PRIVATE];
             var info = this._get_layout_info_or_defaults ();
+            if (for_width < 0) { for_width=null; }
 
             /* we shortcircuit the case of a fixed size set using set_height() */
             if (priv.min_height_set && priv.natural_height_set) {
@@ -2164,7 +2163,7 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
                 Note.LAYOUT("Height request for", for_width, "px");
 
                 /* adjust for the margin */
-                if (for_width >= 0) {
+                if (for_width!==null && for_width >= 0) {
                     for_width -= (info.margin.left + info.margin.right);
                     if (for_width < 0) {
                         for_width = 0;
@@ -2436,7 +2435,340 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
             this.queue_relayout();
         },
 
-        // XXX CSA XXX MISSING FUNCTIONS HERE
+/**
+ * clutter_actor_move_by:
+ * @self: A #ClutterActor
+ * @dx: Distance to move Actor on X axis.
+ * @dy: Distance to move Actor on Y axis.
+ *
+ * Moves an actor by the specified distance relative to its current
+ * position in pixels.
+ *
+ * This function modifies the fixed position of an actor and thus removes
+ * it from any layout management. Another way to move an actor is with an
+ * anchor point, see clutter_actor_set_anchor_point().
+ *
+ * Since: 0.2
+ */
+// line 7946
+        move_by: function(dx, dy) {
+            var info = this._get_layout_info_or_defaults();
+            var x = info.fixed_x;
+            var y = info.fixed_y;
+
+            this.position = { x: x+dx, y: y+dy };
+        },
+
+        // line 7963
+        set min_width(min_width) {
+            var priv = this[PRIVATE];
+
+            /* if we are setting the size on a top-level actor and the
+             * backend only supports static top-levels (e.g. framebuffers)
+             * then we ignore the passed value and we override it with
+             * the stage implementation's preferred size.
+             */
+            if (priv.toplevel &&
+                Feature.available(Feature.STAGE_STATIC)) {
+                return;
+            }
+            var info = this._get_layout_info();
+
+            if (priv.min_width_set && min_width === info.min_width) {
+                return;
+            }
+
+            this.freeze_notify();
+
+            var old = this._store_old_geometry();
+
+            info.min_width = min_width;
+            priv.min_width_set = true;
+            this.notify('min_width');
+            this.notify('min_width_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.thaw_notify();
+
+            this.queue_relayout();
+        },
+
+        // line 8001
+        set min_height(min_height) {
+            var priv = this[PRIVATE];
+
+            /* if we are setting the size on a top-level actor and the
+             * backend only supports static top-levels (e.g. framebuffers)
+             * then we ignore the passed value and we override it with
+             * the stage implementation's preferred size.
+             */
+            if (priv.toplevel &&
+                Feature.available(Feature.STAGE_STATIC)) {
+                return;
+            }
+            var info = this._get_layout_info();
+
+            if (priv.min_height_set && min_height === info.min_height) {
+                return;
+            }
+
+            this.freeze_notify();
+
+            var old = this._store_old_geometry();
+
+            info.min_height = min_height;
+            priv.min_height_set = true;
+            this.notify('min_height');
+            this.notify('min_height_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.thaw_notify();
+
+            this.queue_relayout();
+        },
+
+        // line 8040
+        set natural_width(natural_width) {
+            var priv = this[PRIVATE];
+
+            /* if we are setting the size on a top-level actor and the
+             * backend only supports static top-levels (e.g. framebuffers)
+             * then we ignore the passed value and we override it with
+             * the stage implementation's preferred size.
+             */
+            if (priv.toplevel &&
+                Feature.available(Feature.STAGE_STATIC)) {
+                return;
+            }
+            var info = this._get_layout_info();
+
+            if (priv.natural_width_set && natural_width === info.natural_width) {
+                return;
+            }
+
+            this.freeze_notify();
+
+            var old = this._store_old_geometry();
+
+            info.natural_width = natural_width;
+            priv.natural_width_set = true;
+            this.notify('natural_width');
+            this.notify('natural_width_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.thaw_notify();
+
+            this.queue_relayout();
+        },
+
+        // line 8078
+        set natural_height(natural_height) {
+            var priv = this[PRIVATE];
+
+            /* if we are setting the size on a top-level actor and the
+             * backend only supports static top-levels (e.g. framebuffers)
+             * then we ignore the passed value and we override it with
+             * the stage implementation's preferred size.
+             */
+            if (priv.toplevel &&
+                Feature.available(Feature.STAGE_STATIC)) {
+                return;
+            }
+            var info = this._get_layout_info();
+
+            if (priv.natural_height_set && natural_height === info.natural_height) {
+                return;
+            }
+
+            this.freeze_notify();
+
+            var old = this._store_old_geometry();
+
+            info.natural_height = natural_height;
+            priv.natural_height_set = true;
+            this.notify('natural_height');
+            this.notify('natural_height_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.thaw_notify();
+
+            this.queue_relayout();
+        },
+
+        // line 8115
+        set min_width_set(use_min_width) {
+            var priv = this[PRIVATE];
+            use_min_width = !!use_min_width;
+
+            if (priv.min_width_set === use_min_width) {
+                return;
+            }
+
+            var old = this._store_old_geometry();
+
+            priv.min_width_set = use_min_width;
+            this.notify('min_width_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.queue_relayout();
+        },
+
+        // line 8135
+        set min_height_set(use_min_height) {
+            var priv = this[PRIVATE];
+            use_min_height = !!use_min_height;
+
+            if (priv.min_height_set === use_min_height) {
+                return;
+            }
+
+            var old = this._store_old_geometry();
+
+            priv.min_height_set = use_min_height;
+            this.notify('min_height_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.queue_relayout();
+        },
+
+        // line 8155
+        set natural_width_set(use_natural_width) {
+            var priv = this[PRIVATE];
+            use_natural_width = !!use_natural_width;
+
+            if (priv.natural_width_set === use_natural_width) {
+                return;
+            }
+
+            var old = this._store_old_geometry();
+
+            priv.natural_width_set = use_natural_width;
+            this.notify('natural_width_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.queue_relayout();
+        },
+
+        // line 8175
+        set natural_height_set(use_natural_height) {
+            var priv = this[PRIVATE];
+            use_natural_height = !!use_natural_height;
+
+            if (priv.natural_height_set === use_natural_height) {
+                return;
+            }
+
+            var old = this._store_old_geometry();
+
+            priv.natural_height_set = use_natural_height;
+            this.notify('natural_height_set');
+
+            this._notify_if_geometry_changed(old);
+
+            this.queue_relayout();
+        },
+
+/**
+ * clutter_actor_set_request_mode:
+ * @self: a #ClutterActor
+ * @mode: the request mode
+ *
+ * Sets the geometry request mode of @self.
+ *
+ * The @mode determines the order for invoking
+ * clutter_actor_get_preferred_width() and
+ * clutter_actor_get_preferred_height()
+ *
+ * Since: 1.2
+ */
+        // line 8208
+        set request_mode(mode) {
+            var priv = this[PRIVATE];
+
+            if (priv.request_mode === mode) {
+                return;
+            }
+
+            priv.request_mode = mode;
+
+            priv.needs_width_request = true;
+            priv.needs_height_request = true;
+
+            this.notify('request_mode');
+
+            this.queue_relayout();
+        },
+
+/**
+ * clutter_actor_get_request_mode:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the geometry request mode of @self
+ *
+ * Return value: the request mode for the actor
+ *
+ * Since: 1.2
+ */
+// line 8241
+        get request_mode() {
+            return this[PRIVATE].request_mode;
+        },
+
+/* variant of set_width() without checks and without notification
+ * freeze+thaw, for internal usage only
+ */
+// line 8253
+        _set_width_internal: function(width) {
+            console.assert(width !== undefined);
+            if (width!==null && width >= 0) {
+                /* the Stage will use the :min-width to control the minimum
+                 * width to be resized to, so we should not be setting it
+                 * along with the :natural-width
+                 */
+                if (!this[PRIVATE].toplevel) {
+                    this.min_width = width;
+                }
+
+                this.natural_width = width;
+            } else {
+                /* we only unset the :natural-width for the Stage */
+                if (!this[PRIVATE].toplevel) {
+                    this.min_width_set = false;
+                }
+
+                this.natural_width_set = false;
+            }
+        },
+
+/* variant of set_height() without checks and without notification
+ * freeze+thaw, for internal usage only
+ */
+// line 8281
+        _set_height_internal: function(height) {
+            console.assert(height !== undefined);
+            if (height!==null && height >= 0) {
+                /* see the comment above in set_width_internal() */
+                if (!this[PRIVATE].toplevel) {
+                    this.min_height = height;
+                }
+
+                this.natural_height = height;
+            } else {
+                /* see the comment above in set_width_internal() */
+                if (!this[PRIVATE].toplevel) {
+                    this.min_height_set = false;
+                }
+
+                this.natural_height_set = false;
+            }
+        },
 
 /**
  * clutter_actor_set_size
@@ -3989,6 +4321,7 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
         },
 
         // XXX CSA more functions
+
 /**
  * clutter_actor_has_overlaps:
  * @self: A #ClutterActor
@@ -4009,41 +4342,158 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
  *
  * Since: 1.8
  */
-// line 14738
+// line 14741
         get has_overlaps() {
             // CSA: virtual method invocation
             return this.real_has_overlaps;
         },
 
+
+/**
+ * clutter_actor_has_effects:
+ * @self: A #ClutterActor
+ *
+ * Returns whether the actor has any effects applied.
+ *
+ * Return value: %TRUE if the actor has any effects,
+ *   %FALSE otherwise
+ *
+ * Since: 1.10
+ */
+ // line 14760
+        get has_effects() {
+            console.warn("has_effects unimplemented");
+            return false;
+        },
+
+/**
+ * clutter_actor_has_constraints:
+ * @self: A #ClutterActor
+ *
+ * Returns whether the actor has any constraints applied.
+ *
+ * Return value: %TRUE if the actor has any constraints,
+ *   %FALSE otherwise
+ *
+ * Since: 1.10
+ */
+// line 14782
+        get has_constraints() {
+            return !!(this[PRIVATE].constraints);
+        },
+
+/**
+ * clutter_actor_has_actions:
+ * @self: A #ClutterActor
+ *
+ * Returns whether the actor has any actions applied.
+ *
+ * Return value: %TRUE if the actor has any actions,
+ *   %FALSE otherwise
+ *
+ * Since: 1.10
+ */
+// line 14801
+        get has_actions() {
+            return !!(this[PRIVATE].actions);
+        },
+
+/**
+ * clutter_actor_get_n_children:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the number of children of @self.
+ *
+ * Return value: the number of children of an actor
+ *
+ * Since: 1.10
+ */
+// line 14819
+        get n_children() {
+            return this[PRIVATE].n_children;
+        },
+
+/**
+ * clutter_actor_get_child_at_index:
+ * @self: a #ClutterActor
+ * @index_: the position in the list of children
+ *
+ * Retrieves the actor at the given @index_ inside the list of
+ * children of @self.
+ *
+ * Return value: (transfer none): a pointer to a #ClutterActor, or %NULL
+ *
+ * Since: 1.10
+ */
+// line 14839
+        get_child_at_index: function(index_) {
+            var iter, i;
+
+            console.assert(index_ < this.n_children); // CSA wrong in upstream
+
+            for (iter = this.first_child, i = 0;
+                 iter && i < index_;
+                 iter = iter.next_sibling, i += 1) {
+                /* do nothing */
+            }
+            return iter;
+        },
+
+/*< private >
+ * _clutter_actor_foreach_child:
+ * @actor: The actor whos children you want to iterate
+ * @callback: The function to call for each child
+ * @user_data: Private data to pass to @callback
+ *
+ * Calls a given @callback once for each child of the specified @actor and
+ * passing the @user_data pointer each time.
+ *
+ * Return value: returns %TRUE if all children were iterated, else
+ *    %FALSE if a callback broke out of iteration early.
+ */
+// line 14869
+        _foreach_child: function(callback) {
+            var iter, cont = true;
+            for (iter = this.first_child;
+                 (cont !== false) && iter;
+                 iter = iter.next_sibling) {
+                // "undefined" will keep the iteration going
+                cont = callback.call(iter);
+            }
+            return (cont !== false);
+        },
+
         // XXX CSA more functions
 
-/* _clutter_actor_traverse:
- * @actor: The actor to start traversing the graph from
- * @flags: These flags may affect how the traversal is done
- * @before_children_callback: A function to call before visiting the
- *   children of the current actor.
- * @after_children_callback: A function to call after visiting the
- *   children of the current actor. (Ignored if
- *   %CLUTTER_ACTOR_TRAVERSE_BREADTH_FIRST is passed to @flags.)
- * @user_data: The private data to pass to the callbacks
- *
- * Traverses the scenegraph starting at the specified @actor and
- * descending through all its children and its children's children.
- * For each actor traversed @before_children_callback and
- * @after_children_callback are called with the specified
- * @user_data, before and after visiting that actor's children.
- *
- * The callbacks can return flags that affect the ongoing traversal
- * such as by skipping over an actors children or bailing out of
- * any further traversing.
- */
-        _traverse: function(flags, before, after) {
-            if (flags & TraverseFlags.BREADTH_FIRST) {
-                this._traverse_breadth(before);
-            } else {
-                this._traverse_depth(before, after, 0 /* start depth */);
+        // line 14911
+        _traverse_breadth: function(callback) {
+            var current_depth = 0;
+            var dummy = {}; /* use to delimit depth changes */
+            var queue = [ this, dummy ];
+            var flags, actor, iter;
+
+            for (var i=0; i < queue.length; i++) {
+                actor = queue[i];
+                if (actor === dummy) {
+                    current_depth+=1;
+                    queue.push(dummy);
+                    continue;
+                }
+
+                flags = callback.call(actor, current_depth);
+                if (flags & TraverseVisitFlags.BREAK) {
+                    break;
+                } else if (!(flags & TraverseVisitFlags.SKIP_CHILDREN)) {
+                    /*jshint loopfunc:true */
+                    actor._foreach_child(function() {
+                        queue.push(this);
+                        return true;
+                    });
+                }
             }
         },
+
+        // line 14953
         _traverse_depth: function(before_children_cb, after_children_cb,
                                   current_depth) {
             var flags = 0;
@@ -4077,30 +4527,33 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
             }
             return TraverseVisitFlags.CONTINUE;
         },
-        _traverse_breadth: function(callback) {
-            var current_depth = 0;
-            var dummy = {}; /* use to delimit depth changes */
-            var queue = [ this, dummy ];
-            var flags, actor, iter;
 
-            for (var i=0; i < queue.length; i++) {
-                actor = queue[i];
-                if (actor === dummy) {
-                    current_depth+=1;
-                    queue.push(dummy);
-                    continue;
-                }
-
-                flags = callback.call(actor, current_depth);
-                if (flags & TraverseVisitFlags.BREAK) {
-                    break;
-                } else if (!(flags & TraverseVisitFlags.SKIP_CHILDREN)) {
-                    /*jshint loopfunc:true */
-                    actor._foreach_child(function() {
-                        queue.push(this);
-                        return true;
-                    });
-                }
+/* _clutter_actor_traverse:
+ * @actor: The actor to start traversing the graph from
+ * @flags: These flags may affect how the traversal is done
+ * @before_children_callback: A function to call before visiting the
+ *   children of the current actor.
+ * @after_children_callback: A function to call after visiting the
+ *   children of the current actor. (Ignored if
+ *   %CLUTTER_ACTOR_TRAVERSE_BREADTH_FIRST is passed to @flags.)
+ * @user_data: The private data to pass to the callbacks
+ *
+ * Traverses the scenegraph starting at the specified @actor and
+ * descending through all its children and its children's children.
+ * For each actor traversed @before_children_callback and
+ * @after_children_callback are called with the specified
+ * @user_data, before and after visiting that actor's children.
+ *
+ * The callbacks can return flags that affect the ongoing traversal
+ * such as by skipping over an actors children or bailing out of
+ * any further traversing.
+ */
+// line 15011
+        _traverse: function(flags, before, after) {
+            if (flags & TraverseFlags.BREADTH_FIRST) {
+                this._traverse_breadth(before);
+            } else {
+                this._traverse_depth(before, after, 0 /* start depth */);
             }
         },
 
@@ -4118,10 +4571,12 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
  *
  * Since: 1.10
  */
+        // line 15051
         set layout_manager(manager) {
+            var actor = this;
             var priv = this[PRIVATE];
 
-            var on_layout_manager_changed = function(manager, actor) {
+            var on_layout_manager_changed = function() {
                 actor.queue_relayout();
             };
 
@@ -4134,8 +4589,7 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
                 priv.layout_manager.container = this;
                 priv.layout_manager_id =
                     priv.layout_manager.connect('layout-changed',
-                                                on_layout_manager_changed,
-                                                this);
+                                                on_layout_manager_changed);
             }
             this.queue_relayout();
             this.notify('layout_manager');
@@ -4152,102 +4606,132 @@ define(["./color", "./context", "./enums", "./event", "./geometry", "./note", ".
  *
  * Since: 1.10
  */
+        // line 15099
         get layout_manager() {
             return this[PRIVATE].layout_manager;
         },
 
-
-/**
- * clutter_actor_has_constraints:
- * @self: A #ClutterActor
- *
- * Returns whether the actor has any constraints applied.
- *
- * Return value: %TRUE if the actor has any constraints,
- *   %FALSE otherwise
- *
- * Since: 1.10
- */
-        get has_constraints() {
-            return !!(this[PRIVATE].constraints);
-        },
-
-/**
- * clutter_actor_has_actions:
- * @self: A #ClutterActor
- *
- * Returns whether the actor has any actions applied.
- *
- * Return value: %TRUE if the actor has any actions,
- *   %FALSE otherwise
- *
- * Since: 1.10
- */
-        get has_actions() {
-            return !!(this[PRIVATE].actions);
-        },
-
-/**
- * clutter_actor_get_n_children:
+/*< private >
+ * _clutter_actor_get_layout_info:
  * @self: a #ClutterActor
  *
- * Retrieves the number of children of @self.
+ * Retrieves a pointer to the ClutterLayoutInfo structure.
  *
- * Return value: the number of children of an actor
+ * If the actor does not have a ClutterLayoutInfo associated to it, one
+ * will be created and initialized to the default values.
  *
- * Since: 1.10
+ * This function should be used for setters.
+ *
+ * For getters, you should use _clutter_actor_get_layout_info_or_defaults()
+ * instead.
+ *
+ * Return value: (transfer none): a pointer to the ClutterLayoutInfo structure
  */
-        get n_children() {
-            return this[PRIVATE].n_children;
-        },
-
-/**
- * clutter_actor_get_child_at_index:
- * @self: a #ClutterActor
- * @index_: the position in the list of children
- *
- * Retrieves the actor at the given @index_ inside the list of
- * children of @self.
- *
- * Return value: (transfer none): a pointer to a #ClutterActor, or %NULL
- *
- * Since: 1.10
- */
-        get_child_at_index: function(index_) {
-            var iter, i;
-
-            console.assert(index_ < this.n_children); // CSA wrong in upstream
-
-            for (iter = this.first_child, i = 0;
-                 iter && i < index_;
-                 iter = iter.next_sibling, i += 1) {
-                /* do nothing */
-            }
-            return iter;
+        // line 15140
+        _get_layout_info: function() {
+            console.assert(false, "unimplmented");
+            return null;
         },
 
 /*< private >
- * _clutter_actor_foreach_child:
- * @actor: The actor whos children you want to iterate
- * @callback: The function to call for each child
- * @user_data: Private data to pass to @callback
+ * _clutter_actor_get_layout_info_or_defaults:
+ * @self: a #ClutterActor
  *
- * Calls a given @callback once for each child of the specified @actor and
- * passing the @user_data pointer each time.
+ * Retrieves the ClutterLayoutInfo structure associated to an actor.
  *
- * Return value: returns %TRUE if all children were iterated, else
- *    %FALSE if a callback broke out of iteration early.
+ * If the actor does not have a ClutterLayoutInfo structure associated to it,
+ * then the default structure will be returned.
+ *
+ * This function should only be used for getters.
+ *
+ * Return value: a const pointer to the ClutterLayoutInfo structure
  */
-        _foreach_child: function(callback) {
-            var iter, cont = true;
-            for (iter = this.first_child;
-                 (cont !== false) && iter;
-                 iter = iter.next_sibling) {
-                // "undefined" will keep the iteration going
-                cont = callback.call(iter);
-            }
-            return (cont !== false);
+        // line 15173
+        _get_layout_info_or_defaults: function() {
+            console.assert(false, "unimplemented");
+            return null;
         },
+
+/**
+ * clutter_actor_set_x_align:
+ * @self: a #ClutterActor
+ * @x_align: the horizontal alignment policy
+ *
+ * Sets the horizontal alignment policy of a #ClutterActor, in case the
+ * actor received extra horizontal space.
+ *
+ * See also the #ClutterActor:x-align property.
+ *
+ * Since: 1.10
+ */
+// line 15197
+        set x_align(x_align) {
+            var info = this._get_layout_info();
+            if (info.x_align !== x_align) {
+                info.x_align = x_align;
+
+                this.queue_relayout();
+
+                this.notify('x_align');
+            }
+        },
+
+/**
+ * clutter_actor_get_x_align:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the horizontal alignment policy set using
+ * clutter_actor_set_x_align().
+ *
+ * Return value: the horizontal alignment policy.
+ *
+ * Since: 1.10
+ */
+// line 15228
+        get x_align() {
+            return this._get_layout_info_or_defaults().x_align;
+        },
+
+/**
+ * clutter_actor_set_y_align:
+ * @self: a #ClutterActor
+ * @y_align: the vertical alignment policy
+ *
+ * Sets the vertical alignment policy of a #ClutterActor, in case the
+ * actor received extra vertical space.
+ *
+ * See also the #ClutterActor:y-align property.
+ *
+ * Since: 1.10
+ */
+        set y_align(y_align) {
+            var info = this._get_layout_info();
+            if (info.y_align !== y_align) {
+                info.y_align = y_align;
+
+                this.queue_relayout();
+
+                this.notify('y_align');
+            }
+        },
+
+/**
+ * clutter_actor_get_y_align:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the vertical alignment policy set using
+ * clutter_actor_set_y_align().
+ *
+ * Return value: the vertical alignment policy.
+ *
+ * Since: 1.10
+ */
+        get y_align() {
+            return this._get_layout_info_or_defaults().y_align;
+        },
+
+        // XXX CSA missing functions here
+
 
         get background_color_set() {
             return this[PRIVATE].bg_color_set;
