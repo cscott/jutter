@@ -121,6 +121,12 @@ function _emit(name /* , arg1, arg2 */) {
     } else {
         return false; // "not handled"
     }
+    // strip off detail argument if present
+    var basename = name;
+    var b = basename.indexOf('::');
+    if (b >= 0) {
+        basename = basename.substr(0, b);
+    }
 
     // To deal with re-entrancy (removal/addition while
     // emitting), we copy out a list of what was connected
@@ -132,7 +138,8 @@ function _emit(name /* , arg1, arg2 */) {
     var connection;
     for (i = 0; i < length; ++i) {
         connection = _signalConnections[i];
-        if (connection.name === name) {
+        if (connection.name === name ||
+            connection.name === basename) {
             handlers.push(connection);
         }
     }
@@ -218,7 +225,7 @@ function _notify(propname) {
         }
         return;
     }
-    this.emit('notify', propname, this[propname]);
+    this.emit('notify::'+propname, propname, this[propname]);
 }
 function _freeze_notify() {
     /*jshint validthis:true */
