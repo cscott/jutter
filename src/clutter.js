@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./actor", "./color", "./enums", "./event", "./geometry", "./paint-volume", "./rectangle", "./stage", "./vertex"], function(Actor, Color, Enums, Event, Geometry, PaintVolume, Rectangle, Stage, Vertex) {
+define(["./actor", "./color", "./enums", "./event", "./feature", "./geometry", "./paint-volume", "./rectangle", "./stage", "./vertex"], function(Actor, Color, Enums, Event, Feature, Geometry, PaintVolume, Rectangle, Stage, Vertex) {
 
     var init = function(args) {
         console.log("In Clutter.init", args);
@@ -18,6 +18,7 @@ define(["./actor", "./color", "./enums", "./event", "./geometry", "./paint-volum
         Actor: Actor,
         Color: Color,
         Event: Event,
+        Feature: Feature,
         Geometry: Geometry,
         PaintVolume: PaintVolume,
         Rectangle: Rectangle,

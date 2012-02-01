@@ -9,6 +9,10 @@ define([], function() {
     };
     Context.prototype = {
     };
+    Context._get_default = function() {
+        console.warn("Context._get_default() unimplemented");
+        return null;
+    };
     Context.acquire_id = function(thing) {
         console.warn("acquire_id unimplemented");
         return 0;
