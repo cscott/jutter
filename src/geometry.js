@@ -23,6 +23,15 @@ define([], function() {
         this.height = height;
     }
     Geometry.prototype = {
+        set: function(x, y, width, height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        },
+        set_from_geometry: function(g) {
+            this.set(g.x, g.y, g.width, g.height);
+        },
         copy: function() {
             return new Geometry(this.x, this.y, this.width, this.height);
         },
