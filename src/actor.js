@@ -4,9 +4,15 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature", "./geometry", "./margin", "./note", "./paint-volume", "./signals", "./vertex"], function(ActorBox, Color, Context, Enums, Event, Feature, Geometry, Margin, Note, PaintVolume, Signals, Vertex) {
+define(["./actor-box", "./color", "./container", "./context", "./enums", "./event", "./feature", "./geometry", "./margin", "./note", "./paint-volume", "./signals", "./vertex"], function(ActorBox, Color, Container, Context, Enums, Event, Feature, Geometry, Margin, Note, PaintVolume, Signals, Vertex) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
+
+    // XXX CSA this is defined in clutter-main.c; seems to be a dependency cycle
+    // hack around it for now
+    var get_default_text_direction = function() {
+        return Enums.TextDirection.LTR;
+    };
 
     /**
      * @short_description: Base abstract class for all visual stage actors.
@@ -135,6 +141,137 @@ define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature"
         natural_height: 0
     };
 
+/* Internal helper struct to represent a point that can be stored in
+   either direct pixel coordinates or as a fraction of the actor's
+   size. It is used for the anchor point, scale center and rotation
+   centers. */
+    var AnchorCoord = function() {
+    };
+    AnchorCoord.prototype = {
+        is_fractional: true,
+        x: 0,
+        y: 0,
+        z: 0,
+        // methods
+        get_units: function(actor) {
+            if (this.is_fractional) {
+                var size = actor.size;
+                return new Vertex(size.width * this.x, size.height * this.y, 0);
+            } else {
+                return new Vertex(this.x, this.y, this.z);
+            }
+        },
+        set_units: function(x, y, z) {
+            this.is_fractional = false;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        },
+        get_gravity: function() {
+            if (this.is_fractional) {
+                if (this.x === 0) {
+                    if (this.y === 0) {
+                        return Enums.Gravity.NORTH_WEST;
+                    } else if (this.y === 0.5) {
+                        return Enums.Gravity.WEST;
+                    } else if (this.y === 1.0) {
+                        return Enums.Gravity.SOUTH_WEST;
+                    } else {
+                        return Enums.Gravity.NONE;
+                    }
+                } else if (this.x === 0.5) {
+                    if (this.y === 0) {
+                        return Enums.Gravity.NORTH;
+                    } else if (this.y === 0.5) {
+                        return Enums.Gravity.CENTER;
+                    } else if (this.y === 1.0) {
+                        return Enums.Gravity.SOUTH;
+                    } else {
+                        return Enums.Gravity.NONE;
+                    }
+                } else if (this.x === 1.0) {
+                    if (this.y === 0) {
+                        return Enums.Gravity.NORTH_EAST;
+                    } else if (this.y === 0.5) {
+                        return Enums.Gravity.EAST;
+                    } else if (this.y === 1.0) {
+                        return Enums.Gravity.SOUTH_EAST;
+                    } else {
+                        return Enums.Gravity.NONE;
+                    }
+                } else {
+                    return Enums.Gravity.NONE;
+                }
+            } else {
+                return Enums.Gravity.NONE;
+            }
+        },
+        set_gravity: function(gravity) {
+            if (gravity === Enums.Gravity.NORTH) {
+                this.x = 0.5;
+                this.y = 0.0;
+            } else if (gravity === Enums.Gravity.NORTH_EAST) {
+                this.x = 1.0;
+                this.y = 0.0;
+            } else if (gravity === Enums.Gravity.EAST) {
+                this.x = 1.0;
+                this.y = 0.5;
+            } else if (gravity === Enums.Gravity.SOUTH_EAST) {
+                this.x = 1.0;
+                this.y = 1.0;
+            } else if (gravity === Enums.Gravity.SOUTH) {
+                this.x = 0.5;
+                this.y = 1.0;
+            } else if (gravity === Enums.Gravity.SOUTH_WEST) {
+                this.x = 0.0;
+                this.y = 1.0;
+            } else if (gravity === Enums.Gravity.WEST) {
+                this.x = 0.0;
+                this.y = 0.5;
+            } else if (gravity === Enums.Gravity.NORTH_WEST) {
+                this.x = 0.0;
+                this.y = 0.0;
+            } else if (gravity === Enums.Gravity.CENTER) {
+                this.x = 0.5;
+                this.y = 0.5;
+            } else {
+                this.x = 0.0;
+                this.y = 0.0;
+            }
+            this.is_fractional = true;
+        },
+        is_zero: function() {
+            if (this.is_fractional) {
+                return this.x === 0 && this.y === 0;
+            } else {
+                return this.x === 0 && this.y === 0 && this.z === 0;
+            }
+        }
+    };
+    var SizeRequest = function() {
+    };
+    SizeRequest.prototype = {
+        valid: false,
+        age: 0,
+        for_size: 0,
+        min_size: 0,
+        natural_size: 0
+    };
+    var TransformInfo = function() {
+        this.rx_center = new AnchorCoord();
+        this.ry_center = new AnchorCoord();
+        this.rz_center = new AnchorCoord();
+        this.scale_center = new AnchorCoord();
+        this.anchor = new AnchorCoord();
+    };
+    TransformInfo.prototype = {
+        rx_angle: 0,
+        ry_angle: 0,
+        rz_angle: 0,
+        scale_x: 0,
+        scale_y: 0
+    };
+
 /*< private >
  * effective_align:
  * @align: a #ClutterActorAlign
@@ -221,6 +358,8 @@ define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature"
 
             this.has_clip = false;
             this.clip = new Geometry(0,0,0,0);
+
+            this.text_direction = Enums.TextDirection.DEFAULT;
         },
         get in_destruction() {
             return !!(this.flags & ActorPrivateFlags.IN_DESTRUCTION);
@@ -1634,9 +1773,6 @@ define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature"
         // line 4455
         get show_on_set_parent() {
             return this[PRIVATE].show_on_set_parent;
-        },
-        get text_direction() {
-            return this[PRIVATE].text_direction;
         },
         get has_pointer() {
             return this[PRIVATE].has_pointer;
@@ -4331,6 +4467,9 @@ define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature"
         set _enable_model_view_transform(enable) {
             this[PRIVATE].enable_model_view_transform = !!enable;
         },
+        get _enable_model_view_transform() {
+            return !!this[PRIVATE].enable_model_view_transform;
+        },
         // line 13113
         set _enable_paint_unmapped(enable) {
             var priv = this[PRIVATE];
@@ -4348,6 +4487,118 @@ define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature"
             } else {
                 this.update_map_state(MapState.MAKE_UNMAPPED);
             }
+        },
+        get _enable_paint_unmapped() {
+            return !!this[PRIVATE].enable_paint_unmapped;
+        },
+/**
+ * clutter_actor_get_transformation_matrix:
+ * @self: a #ClutterActor
+ * @matrix: (out caller-allocates): the return location for a #CoglMatrix
+ *
+ * Retrieves the transformations applied to @self relative to its
+ * parent.
+ *
+ * Since: 1.0
+ */
+        get transformation_matrix() {
+            console.error("Unimplemented");
+        },
+        set in_clone_paint(is_in_clone_paint) {
+            this[PRIVATE].in_clone_paint = !!is_in_clone_paint;
+        },
+/**
+ * clutter_actor_is_in_clone_paint:
+ * @self: a #ClutterActor
+ *
+ * Checks whether @self is being currently painted by a #ClutterClone
+ *
+ * This function is useful only inside the ::paint virtual function
+ * implementations or within handlers for the #ClutterActor::paint
+ * signal
+ *
+ * This function should not be used by applications
+ *
+ * Return value: %TRUE if the #ClutterActor is currently being painted
+ *   by a #ClutterClone, and %FALSE otherwise
+ *
+ * Since: 1.0
+ */
+        get in_clone_paint() {
+            return this[PRIVATE].in_clone_paint;
+        },
+/**
+ * clutter_actor_set_text_direction:
+ * @self: a #ClutterActor
+ * @text_dir: the text direction for @self
+ *
+ * Sets the #ClutterTextDirection for an actor
+ *
+ * The passed text direction must not be %CLUTTER_TEXT_DIRECTION_DEFAULT
+ *
+ * If @self implements #ClutterContainer then this function will recurse
+ * inside all the children of @self (including the internal ones).
+ *
+ * Composite actors not implementing #ClutterContainer, or actors requiring
+ * special handling when the text direction changes, should connect to
+ * the #GObject::notify signal for the #ClutterActor:text-direction property
+ *
+ * Since: 1.2
+ */
+        set text_direction(text_dir) {
+            console.assert(text_dir !== Enums.TextDirection.DEFAULT);
+
+            var priv = this[PRIVATE];
+            if (priv.text_direction !== text_dir) {
+                priv.text_direction = text_dir;
+
+                /* we need to emit the notify::text-direction first, so that
+                 * the sub-classes can catch that and do specific handling of
+                 * the text direction; see clutter_text_direction_changed_cb()
+                 * inside clutter-text.c
+                 */
+                this.notify('text_direction');
+
+                this._foreach_child(function() {
+                    this.text_direction = text_dir;
+                    return true;
+                });
+
+                this.queue_relayout();
+            }
+        },
+        set has_pointer(has_pointer) {
+            has_pointer = !!has_pointer;
+            if (this[PRIVATE].has_pointer !== has_pointer) {
+                this[PRIVATE].has_pointer = has_pointer;
+
+                this.notify('has_pointer');
+            }
+        },
+
+/**
+ * clutter_actor_get_text_direction:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the value set using clutter_actor_set_text_direction()
+ *
+ * If no text direction has been previously set, the default text
+ * direction, as returned by clutter_get_default_text_direction(), will
+ * be returned instead
+ *
+ * Return value: the #ClutterTextDirection for the actor
+ *
+ * Since: 1.2
+ */
+        get text_direction() {
+            var priv = this[PRIVATE];
+
+            /* if no direction has been set yet use the default */
+            if (priv.text_direction === Enums.TextDirection.DEFAULT) {
+                priv.text_direction = get_default_text_direction ();
+            }
+
+            return priv.text_direction;
         },
 
         // XXX CSA missing functions
@@ -5151,6 +5402,7 @@ define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature"
             this.notify('no_layout');
         }
     };
+    Container.addContainerProperties(Actor.prototype);
     Signals.addSignalMethods(Actor.prototype);
     Signals.register(Actor.prototype, {
         destroy: {
