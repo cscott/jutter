@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./color", "./context", "./enums", "./event", "./feature", "./geometry", "./margin", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Enums, Event, Feature, Geometry, Margin, Note, PaintVolume, Signals, Vertex) {
+define(["./actor-box", "./color", "./context", "./enums", "./event", "./feature", "./geometry", "./margin", "./note", "./paint-volume", "./signals", "./vertex"], function(ActorBox, Color, Context, Enums, Event, Feature, Geometry, Margin, Note, PaintVolume, Signals, Vertex) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -204,6 +204,7 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
             this.needs_width_request = true;
             this.needs_height_request = true;
             this.needs_allocation = true;
+            this.allocation = new ActorBox(0,0,0,0);
 
             this.cached_width_age = 1;
             this.cached_height_age = 1;
