@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./color", "./context", "./enums", "./event", "./feature", "./geometry", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Enums, Event, Feature, Geometry, Note, PaintVolume, Signals, Vertex) {
+define(["./color", "./context", "./enums", "./event", "./feature", "./geometry", "./margin", "./note", "./paint-volume", "./signals", "./vertex"], function(Color, Context, Enums, Event, Feature, Geometry, Margin, Note, PaintVolume, Signals, Vertex) {
     // XXX CSA note: show/show_all, hide/hide_all seem to be named funny;
     // the klass named real_show as show, etc.
 
@@ -101,6 +101,39 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
         INTERNAL_CHILD:  1 << 6
     };
     Object.freeze(ActorPrivateFlags);
+
+
+/*< private >
+ * ClutterLayoutInfo:
+ * @fixed_x: the fixed position of the actor, set using clutter_actor_set_x()
+ * @fixed_y: the fixed position of the actor, set using clutter_actor_set_y()
+ * @margin: the composed margin of the actor
+ * @x_expand: whether the actor should expand horizontally
+ * @y_expand: whether the actor should expand vertically
+ * @x_align: the horizontal alignment, if the actor expands horizontally
+ * @y_align: the vertical alignment, if the actor expands vertically
+ * @min_width: the minimum width, set using clutter_actor_set_min_width()
+ * @min_height: the minimum height, set using clutter_actor_set_min_height()
+ * @natural_width: the natural width, set using clutter_actor_set_natural_width()
+ * @natural_height: the natural height, set using clutter_actor_set_natural_height()
+ *
+ * Ancillary layout information for an actor.
+ */
+    var LayoutInfo = function() {
+        this.margin = new Margin();
+    };
+    // default_layout_info
+    LayoutInfo.prototype = {
+        fixed_x: 0,
+        fixed_y: 0,
+        margin: null,
+        x_align: Enums.ActorAlign.FILL,
+        y_align: Enums.ActorAlign.FILL,
+        min_width: 0,
+        min_height: 0,
+        natural_width: 0,
+        natural_height: 0
+    };
 
 /*< private >
  * effective_align:
@@ -651,9 +684,6 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
             }
         },
 
-        get show_on_set_parent() {
-            return this[PRIVATE].show_on_set_parent;
-        },
         set show_on_set_parent(set_show) {
             var priv = this[PRIVATE];
             set_show = !!set_show;
@@ -1392,8 +1422,9 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
                 /* we need to unrealize *before* we set parent_actor to NULL,
                  * because in an unrealize method actors are dissociating from the
                  * stage, which means they need to be able to
-                 * clutter_actor_get_stage(). This should unmap and unrealize,
-                 *  unless we're reparenting.
+                 * clutter_actor_get_stage().
+                 *
+                 * This should unmap and unrealize, unless we're reparenting.
                  */
                 child.update_map_state(MapState.MAKE_UNREALIZED);
             } else {
@@ -1572,6 +1603,61 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
         get scale_y() {
             var info = this._get_transform_info_or_defaults ();
             return info.scale_y;
+        },
+        //line 4353
+        get rotation_angle_x() {
+            var info = this._get_transform_info_or_defaults ();
+            return info.rx_angle;
+        },
+        get rotation_angle_y() {
+            var info = this._get_transform_info_or_defaults ();
+            return info.ry_angle;
+        },
+        get rotation_angle_z() {
+            var info = this._get_transform_info_or_defaults ();
+            return info.rz_angle;
+        },
+        // line 4380
+        get rotation_center_x() {
+            return this.get_rotation(Enums.RotateAxis.X_AXIS);
+        },
+        get rotation_center_y() {
+            return this.get_rotation(Enums.RotateAxis.Y_AXIS);
+        },
+        get rotation_center_z() {
+            return this.get_rotation(Enums.RotateAxis.Z_AXIS);
+        },
+
+        // XXX CSA: more functions here
+
+        // line 4455
+        get show_on_set_parent() {
+            return this[PRIVATE].show_on_set_parent;
+        },
+        get text_direction() {
+            return this[PRIVATE].text_direction;
+        },
+        get has_pointer() {
+            return this[PRIVATE].has_pointer;
+        },
+        // line 4525
+        get background_color_set() {
+            return this[PRIVATE].bg_color_set;
+        },
+
+        // line 4548
+        dispose: function() {
+            console.error("Unimplemented");
+        },
+
+        // XXX CSA: more functions here
+
+        // line 4747
+        get real_has_overlaps() {
+            /* By default we'll assume that all actors need an offscreen redirect to get
+             * the correct opacity. Actors such as ClutterTexture that would never need
+             * an offscreen redirect can override this to return FALSE. */
+            return true;
         },
 
         // XXX CSA: more functions here
@@ -4198,7 +4284,7 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
  *
  * Retrieves the #ClutterStage where @actor is contained.
  *
- * Return value: (transfer none) (type Clutter.Actor): the stage
+ * Return value: (transfer none) (type Clutter.Stage): the stage
  *   containing the actor, or %NULL
  *
  * Since: 0.8
@@ -4629,8 +4715,10 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
  */
         // line 15140
         _get_layout_info: function() {
-            console.assert(false, "unimplmented");
-            return null;
+            if (!('_layout_info' in this)) {
+                this._layout_info = new LayoutInfo();
+            }
+            return this._layout_info;
         },
 
 /*< private >
@@ -4648,8 +4736,10 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
  */
         // line 15173
         _get_layout_info_or_defaults: function() {
-            console.assert(false, "unimplemented");
-            return null;
+            if (!('_layout_info' in this)) {
+                return new LayoutInfo();
+            }
+            return this._layout_info;
         },
 
 /**
@@ -4730,12 +4820,206 @@ define(["./color", "./context", "./enums", "./event", "./feature", "./geometry",
             return this._get_layout_info_or_defaults().y_align;
         },
 
-        // XXX CSA missing functions here
+/**
+ * clutter_actor_set_margin:
+ * @self: a #ClutterActor
+ * @margin: a #ClutterMargin
+ *
+ * Sets all the components of the margin of a #ClutterActor.
+ *
+ * Since: 1.10
+ */
+        set margin(margin) {
+            console.assert(margin);
+            var changed = false;
 
+            this.freeze_notify();
 
-        get background_color_set() {
-            return this[PRIVATE].bg_color_set;
+            var info = this._get_layout_info();
+
+            if (info.margin.top !== margin.top) {
+                info.margin.top = margin.top;
+                this.notify('margin_top');
+                changed = true;
+            }
+            if (info.margin.right !== margin.right) {
+                info.margin.right = margin.right;
+                this.notify('margin_right');
+                changed = true;
+            }
+            if (info.margin.bottom !== margin.bottom) {
+                info.margin.bottom = margin.bottom;
+                this.notify('margin_bottom');
+                changed = true;
+            }
+            if (info.margin.left !== margin.left) {
+                info.margin.left = margin.left;
+                this.notify('margin_left');
+                changed = true;
+            }
+
+            if (changed) {
+                this.queue_relayout();
+            }
+
+            this.thaw_notify();
         },
+
+/**
+ * clutter_actor_get_margin:
+ * @self: a #ClutterActor
+ * @margin: (out caller-allocates): return location for a #ClutterMargin
+ *
+ * Retrieves all the components of the margin of a #ClutterActor.
+ *
+ * Since: 1.10
+ */
+        get margin() {
+            var info = this._get_layout_info_or_defaults();
+
+            return info.margin.copy();
+        },
+
+/**
+ * clutter_actor_set_margin_top:
+ * @self: a #ClutterActor
+ * @margin: the top margin
+ *
+ * Sets the margin from the top of a #ClutterActor.
+ *
+ * Since: 1.10
+ */
+        set margin_top(margin) {
+            console.assert(margin >= 0);
+
+            var info = this._get_layout_info();
+            if (info.margin.top === margin) {
+                return;
+            }
+            info.margin.top = margin;
+            this.queue_relayout();
+            this.notify('margin_top');
+        },
+
+/**
+ * clutter_actor_get_margin_top:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the top margin of a #ClutterActor.
+ *
+ * Return value: the top margin
+ *
+ * Since: 1.10
+ */
+        get margin_top() {
+            return this._get_layout_info_or_defaults().margin.top;
+        },
+
+/**
+ * clutter_actor_set_margin_bottom:
+ * @self: a #ClutterActor
+ * @margin: the bottom margin
+ *
+ * Sets the margin from the bottom of a #ClutterActor.
+ *
+ * Since: 1.10
+ */
+        set margin_bottom(margin) {
+            console.assert(margin >= 0);
+
+            var info = this._get_layout_info();
+            if (info.margin.bottom === margin) {
+                return;
+            }
+            info.margin.bottom = margin;
+            this.queue_relayout();
+            this.notify('margin_bottom');
+        },
+
+/**
+ * clutter_actor_get_margin_bottom:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the bottom margin of a #ClutterActor.
+ *
+ * Return value: the bottom margin
+ *
+ * Since: 1.10
+ */
+        get margin_bottom() {
+            return this._get_layout_info_or_defaults().margin.bottom;
+        },
+
+/**
+ * clutter_actor_set_margin_left:
+ * @self: a #ClutterActor
+ * @margin: the left margin
+ *
+ * Sets the margin from the left of a #ClutterActor.
+ *
+ * Since: 1.10
+ */
+        set margin_left(margin) {
+            console.assert(margin >= 0);
+
+            var info = this._get_layout_info();
+            if (info.margin.left === margin) {
+                return;
+            }
+            info.margin.left = margin;
+            this.queue_relayout();
+            this.notify('margin_left');
+        },
+
+/**
+ * clutter_actor_get_margin_left:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the left margin of a #ClutterActor.
+ *
+ * Return value: the left margin
+ *
+ * Since: 1.10
+ */
+        get margin_left() {
+            return this._get_layout_info_or_defaults().margin.left;
+        },
+
+/**
+ * clutter_actor_set_margin_right:
+ * @self: a #ClutterActor
+ * @margin: the right margin
+ *
+ * Sets the margin from the right of a #ClutterActor.
+ *
+ * Since: 1.10
+ */
+        set margin_right(margin) {
+            console.assert(margin >= 0);
+
+            var info = this._get_layout_info();
+            if (info.margin.right === margin) {
+                return;
+            }
+            info.margin.right = margin;
+            this.queue_relayout();
+            this.notify('margin_right');
+        },
+
+/**
+ * clutter_actor_get_margin_right:
+ * @self: a #ClutterActor
+ *
+ * Retrieves the right margin of a #ClutterActor.
+ *
+ * Return value: the right margin
+ *
+ * Since: 1.10
+ */
+        get margin_right() {
+            return this._get_layout_info_or_defaults().margin.right;
+        },
+
 /**
  * clutter_actor_set_background_color:
  * @self: a #ClutterActor
