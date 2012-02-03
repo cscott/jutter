@@ -17,10 +17,10 @@ define(["./backend", "./context", "./enums", "./feature", "./note"], function(Ba
     };
     Main.prototype = { };
 
-/* pre_parse_hook: initialise variables depending on environment
- * variables; these variables might be overridden by the command
- * line arguments that are going to be parsed after.
- */
+    /* pre_parse_hook: initialise variables depending on environment
+     * variables; these variables might be overridden by the command
+     * line arguments that are going to be parsed after.
+     */
     var pre_parse_hook = function() {
         if (is_initialized) { return true; }
 
@@ -67,6 +67,24 @@ define(["./backend", "./context", "./enums", "./feature", "./note"], function(Ba
         }
         return true;
     };
+
+    var get_text_direction = function() {
+        var dir = Enums.TextDirection.LTR;
+
+        var direction = window.JUTTER_TEXT_DIRECTION;
+        if (direction) {
+            if (direction === 'rtl') {
+                dir = Enums.TextDirection.RTL;
+            } else if (direction === 'ltr') {
+                dir = Enums.TextDirection.LTR;
+            }
+        } else {
+            // XXX CSA XXX gettext fallback unimplemented
+            console.warn("gettext text direction fallback unimplemented");
+        }
+        return dir;
+    };
+
 
     var base_init_initialized = false;
     Main.base_init = function() {
@@ -121,7 +139,7 @@ define(["./backend", "./context", "./enums", "./feature", "./note"], function(Ba
         Options.text_direction = get_text_direction();
 
         /* Initiate event collection */
-        backend._init_events();
+        backend.init_events();
 
         is_initialized = true;
         ctx.is_initialized = true;

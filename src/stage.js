@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./actor", "./color", "./dom", "./enums", "./group", "./note"], function(Actor, Color, Dom, Enums, Group, Note) {
+define(["./actor", "./actor-box", "./color", "./dom", "./enums", "./feature", "./group", "./note"], function(Actor, ActorBox, Color, Dom, Enums, Feature, Group, Note) {
     var PickMode = Enums.PickMode;
 
     /** A 'Stage' is a top-level window on which child actors are placed
@@ -12,6 +12,17 @@ define(["./actor", "./color", "./dom", "./enums", "./group", "./note"], function
      */
     var PRIVATE = "_stage_private";
     var DEFAULT_STAGE_COLOR = Color.BLACK;
+
+    var Hint = {
+        NONE: 0,
+        NO_CLEAR_ON_PAINT: 1 << 0
+    };
+    Object.freeze(Hint);
+
+    var QueueRedrawEntry = function(actor) {
+        this.actor = actor;
+        this.has_clip = false;
+    };
 
     var StagePrivate = function() {
         this._init();
@@ -96,6 +107,238 @@ define(["./actor", "./color", "./dom", "./enums", "./group", "./note"], function
                 this.set_props(params);
             }
         },
+        real_get_preferred_width: {
+            value: function(for_height) {
+                var priv = this[PRIVATE];
+                var width = 0;
+
+                if (priv.impl) {
+                    var geom = priv.impl.get_geometry();
+                    width = geom.width;
+                }
+                return { min_width: width, natural_width: width };
+            }
+        },
+        real_get_preferred_height: {
+            value: function(for_width) {
+                var priv = this[PRIVATE];
+                var height = 0;
+
+                if (priv.impl) {
+                    var geom = priv.impl.get_geometry();
+                    height = geom.height;
+                }
+                return { min_height: height, natural_height: height };
+            }
+        },
+        queue_full_redraw: {
+            value: function() {
+                if (this.in_destruction) { return; }
+
+                this.queue_redraw();
+
+                /* Just calling clutter_actor_queue_redraw will typically only
+                 * redraw the bounding box of the children parented on the stage but
+                 * in this case we really need to ensure that the full stage is
+                 * redrawn so we add a NULL redraw clip to the stage window. */
+                var stage_window = this._window;
+                if (!stage_window) {
+                    return;
+                }
+
+                stage_window._add_redraw_clip(null);
+            }
+        },
+        is_default: {
+            get: function() {
+                var stage_manager = StageManager.get_default();
+                if (this !== stage_manager.get_default_stage()) {
+                    return false;
+                }
+                var impl = this._window;
+                if (impl !== this._default_window) {
+                    return false;
+                }
+                return true;
+            }
+        },
+        real_allocate: {
+            value: function(box, flags) {
+                var priv = this[PRIVATE];
+
+                var origin_changed = !!(flags & Enums.AllocationFlags.ABSOLUTE_ORIGIN_CHANGED);
+
+                if (!priv.impl) { return; }
+
+                /* our old allocation */
+                var prev_geom = this.allocation_geometry;
+
+                /* the current allocation */
+                var width = box.width;
+                var height = box.height;
+
+                /* the current Stage implementation size */
+                var window_size = priv.impl.geometry;
+
+                /* if the stage is fixed size (for instance, it's using a EGL framebuffer)
+                 * then we simply ignore any allocation request and override the
+                 * allocation chain - because we cannot forcibly change the size of the
+                 * stage window.
+                 */
+                if (!Feature.available(Feature.STAGE_STATIC)) {
+                    Note.LAYOUT("Following allocation to",width,"x",height,
+                                "with origin",
+                                origin_changed ? "changed" : "not changed");
+
+                    this.set_allocation(box, flags |
+                                        Enums.AllocationFlags.DELEGATE_LAYOUT);
+
+                    /* Ensure the window is sized correctly */
+                    if (!priv.is_fullscreen) {
+                        if (priv.min_size_changed) {
+                            var min_width = this.min_width;
+                            var min_width_set = this.min_width_set;
+                            var min_height = this.min_height;
+                            var min_height_set = this.min_height_set;
+
+                            if (!min_width_set) { min_width = 1; }
+                            if (!min_height_set) { min_height = 1; }
+
+                            if (width < min_width) { width = min_width; }
+                            if (height < min_height) { height = min_height; }
+
+                            priv.min_size_changed = false;
+                        }
+                        if (window_size.width !== width ||
+                            window_size.height !== height) {
+                            priv.impl.resize(width, height);
+                        }
+                    }
+                } else {
+                    var override = new ActorBox(0, 0,
+                                                window_size.width,
+                                                window_size.height);
+
+                    Note.LAYOUT("Overriding original allocation of",
+                                width, "x", height, "with",
+                                override.x2, "x", override.y2,
+                                "with origin",
+                                origin_changed ? "changed" : "not changed");
+
+                    /* and store the overridden allocation */
+                    this.set_allocation(override, flags |
+                                        Enums.AllocationFlags.DELEGATE_LAYOUT);
+                }
+
+                /* XXX: Until Cogl becomes fully responsible for backend windows
+                 * Clutter need to manually keep it informed of the current window
+                 * size. We do this after the allocation above so that the stage
+                 * window has a chance to update the window size based on the
+                 * allocation.
+                 */
+                window_size = priv.impl.geometry;
+                // XXX CSA XXX
+                //cogl_onscreen_clutter_backend_set_size (window_size.width,
+                //                                        window_size.height);
+
+                /* reset the viewport if the allocation effectively changed */
+                var geom = this.allocation_geometry;
+                if (geom.width !== prev_geom.width ||
+                    geom.height !== prev_geom.height) {
+                    this.set_viewport(0, 0, geom.width, geom.height);
+
+                    /* Note: we don't assume that set_viewport will queue a full redraw
+                     * since it may bail-out early if something preemptively set the
+                     * viewport before the stage was really allocated its new size.
+                     */
+                    this.queue_full_redraw ();
+                }
+            }
+        },
+
+        _update_active_framebuffer: {
+            value: function() {
+                throw new Error("Unimplemented");
+            }
+        },
+
+/* This provides a common point of entry for painting the scenegraph
+ * for picking or painting...
+ *
+ * XXX: Instead of having a toplevel 2D clip region, it might be
+ * better to have a clip volume within the view frustum. This could
+ * allow us to avoid projecting actors into window coordinates to
+ * be able to cull them.
+ */
+        _do_paint: {
+            value: function(clip) {
+                var priv = this[PRIVATE];
+                var geom = priv.impl.geometry;
+                var clip_poly = [];
+
+                if (clip) {
+                    clip_poly[0] = Math.max (clip.x, 0);
+                    clip_poly[1] = Math.max (clip.y, 0);
+                    clip_poly[2] = Math.min (clip.x + clip.width, geom.width);
+                    clip_poly[3] = clip_poly[1];
+                    clip_poly[4] = clip_poly[2];
+                    clip_poly[5] = Math.min (clip.y + clip.height, geom.height);
+                    clip_poly[6] = clip_poly[0];
+                    clip_poly[7] = clip_poly[5];
+                } else {
+                    clip_poly[0] = 0;
+                    clip_poly[1] = 0;
+                    clip_poly[2] = geom.width;
+                    clip_poly[3] = 0;
+                    clip_poly[4] = geom.width;
+                    clip_poly[5] = geom.height;
+                    clip_poly[6] = 0;
+                    clip_poly[7] = geom.height;
+                }
+
+                Note.CLIPPING("Setting stage clip to: x=",clip_poly[0],
+                              ", y=", clip_poly[1],
+                              ", width=", clip_poly[2] - clip_poly[0],
+                              ", height=", clip_poly[5] - clip_poly[1]);
+
+                // XXX CSA XXX
+                //_cogl_util_get_eye_planes_for_screen_poly (
+                //    clip_poly, 4, priv.viewport,
+                //    &priv.projection, &priv.inverse_projection,
+                //    priv.current_clip_planes);
+
+                //_clutter_stage_paint_volume_stack_free_all (stage);
+                this._update_active_framebuffer();
+                this.paint();
+            }
+        },
+
+        // line 672
+        real_paint: {
+            value: function() {
+                console.error("Unimplemented");
+            }
+        },
+
+        // line 742
+        real_pick: {
+            value: function() {
+                console.error("Unimplemented");
+            }
+        },
+
+        // line 754
+        real_get_paint_volume: {
+            value: function(volume) {
+                /* Returning False effectively means Clutter has to assume it covers
+                 * everything... */
+                return false;
+            }
+        },
+
+        // XXX CSA XXX MORE STUFF HERE
+
+
         _notify_min_size: {
             value: function() {
                 console.log("NOTIFY MIN SIZE", arguments);

@@ -12,6 +12,9 @@ define(["./backend"], function(Backend) {
     BackendWebGL.prototype._init = function() {
         Object.getPrototypeOf(BackendWebGL.prototype)._init.call(this);
     };
+    BackendWebGL.prototype.events_webgl_init = function() {
+        // XXX CSA XXX set up event handlers
+    };
 
     return BackendWebGL;
 });

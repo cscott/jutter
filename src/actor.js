@@ -1782,9 +1782,6 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
         get show_on_set_parent() {
             return this[PRIVATE].show_on_set_parent;
         },
-        get has_pointer() {
-            return this[PRIVATE].has_pointer;
-        },
         // line 4525
         get background_color_set() {
             return this[PRIVATE].bg_color_set;
@@ -1795,10 +1792,107 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
             console.error("Unimplemented");
         },
 
-        // XXX CSA: more functions here
+        // line 4605
+        finalize: function() {
+            var priv = this[PRIVATE];
+
+            Note.MISC("Finalize actor", this);
+
+            Context.release_id(priv.id);
+
+            var sup = Object.getPrototypeOf(Actor.prototype);
+            if (sup.finalize) { sup.finalize.call(this); }
+        },
+
+/**
+ * clutter_actor_get_accessible:
+ * @self: a #ClutterActor
+ *
+ * Returns the accessible object that describes the actor to an
+ * assistive technology.
+ *
+ * If no class-specific #AtkObject implementation is available for the
+ * actor instance in question, it will inherit an #AtkObject
+ * implementation from the first ancestor class for which such an
+ * implementation is defined.
+ *
+ * The documentation of the <ulink
+ * url="http://developer.gnome.org/doc/API/2.0/atk/index.html">ATK</ulink>
+ * library contains more information about accessible objects and
+ * their uses.
+ *
+ * Returns: (transfer none): the #AtkObject associated with @actor
+ */
+        get accessible() {
+            return this.real_get_accessible();
+        },
+        real_get_accessible: function() {
+            console.error("Unimplemented");
+        },
+
+        // line 4674
+        real_get_paint_volume: function(volume) {
+            var priv = this[PRIVATE];
+
+            /* this is the default return value: we cannot know if a class
+             * is going to paint outside its allocation, so we take the
+             * conservative approach.
+             */
+            var res = false;
+
+            /* we start from the allocation */
+            volume.set_from_allocation(this);
+
+            /* if the actor has a clip set then we have a pretty definite
+             * size for the paint volume: the actor cannot possibly paint
+             * outside the clip region.
+             */
+            if (priv.clip_to_allocation) {
+                /* the allocation has already been set, so we just flip the
+                 * return value
+                 */
+                res = true;
+            } else if (priv.has_clip &&
+                       priv.clip.width >= 0 &&
+                       priv.clip.height >= 0) {
+                var origin = new Vertex(priv.clip.x, priv.clip.y, 0);
+
+                volume.origin = origin;
+                volume.width = priv.clip.width;
+                volume.height = priv.clip.height;
+
+                res = true;
+            }
+
+            /* if we don't have children we just bail out here... */
+            if (priv.n_children === 0) {
+                return res;
+            }
+
+            /* ...but if we have children then we ask for their paint volume in
+             * our coordinates. if any of our children replies that it doesn't
+             * have a paint volume, we bail out
+             */
+            var child;
+            for (child = priv.first_child;
+                 child;
+                 child = child[PRIVATE].next_sibling) {
+                var child_volume = child.get_transformed_paint_volume(this);
+
+                if (!child_volume) {
+                    res = false;
+                    break;
+                }
+
+                volume.union(child_volume);
+                res = true;
+            }
+
+            return res;
+        },
 
         // line 4747
-        get real_has_overlaps() {
+        real_has_overlaps: function() {
             /* By default we'll assume that all actors need an offscreen redirect to get
              * the correct opacity. Actors such as ClutterTexture that would never need
              * an offscreen redirect can override this to return FALSE. */
@@ -4609,6 +4703,58 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
             return priv.text_direction;
         },
 
+/**
+ * clutter_actor_has_pointer:
+ * @self: a #ClutterActor
+ *
+ * Checks whether an actor contains the pointer of a
+ * #ClutterInputDevice
+ *
+ * Return value: %TRUE if the actor contains the pointer, and
+ *   %FALSE otherwise
+ *
+ * Since: 1.2
+ */
+        get has_pointer() {
+            return this[PRIVATE].has_pointer;
+        },
+
+/* XXX: This is a workaround for not being able to break the ABI of
+ * the QUEUE_REDRAW signal. It is an out-of-band argument.  See
+ * clutter_actor_queue_clipped_redraw() for details.
+ */
+        get queue_redraw_clip() {
+            return this["-clutter-actor-queue-redraw-clip"];
+        },
+        set queue_redraw_clip(clip) {
+            this["-clutter-actor-queue-redraw-clip"] = clip;
+        },
+
+/**
+ * clutter_actor_has_allocation:
+ * @self: a #ClutterActor
+ *
+ * Checks if the actor has an up-to-date allocation assigned to
+ * it. This means that the actor should have an allocation: it's
+ * visible and has a parent. It also means that there is no
+ * outstanding relayout request in progress for the actor or its
+ * children (There might be other outstanding layout requests in
+ * progress that will cause the actor to get a new allocation
+ * when the stage is laid out, however).
+ *
+ * If this function returns %FALSE, then the actor will normally
+ * be allocated before it is next drawn on the screen.
+ *
+ * Return value: %TRUE if the actor has an up-to-date allocation
+ *
+ * Since: 1.4
+ */
+        get has_allocation() {
+            var priv = this[PRIVATE];
+
+            return priv.parent && this.visible && !priv.needs_allocation;
+        },
+
         // XXX CSA missing functions
 
 /**
@@ -4691,7 +4837,7 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
 // line 14741
         get has_overlaps() {
             // CSA: virtual method invocation
-            return this.real_has_overlaps;
+            return this.real_has_overlaps();
         },
 
 
@@ -5408,7 +5554,9 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
                 this.flags &= (~ActorFlags.NO_LAYOUT);
             }
             this.notify('no_layout');
-        }
+        },
+        get in_destruction() { return this[PRIVATE].in_destruction; }
+
     };
     Container.addContainerProperties(Actor.prototype);
     Signals.addSignalMethods(Actor.prototype);

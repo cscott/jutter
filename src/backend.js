@@ -7,6 +7,22 @@
 define(["./note", "./settings", "./signals"], function(Note, Settings, Signals) {
     var current_context_stage = null; // for Backend.ensure_context()
 
+    // XXX CSA XXX STUB OUT
+    var Cogl = {
+        Context: function() { },
+        Display: function() { },
+        Renderer: function() { },
+        SwapChain: function() { },
+        OnscreenTemplate: function() { },
+    };
+    Cogl.Display.prototype = {
+        setup: function() { return true; }
+    };
+    Cogl.Renderer.prototype = {
+        connect: function() { return true; },
+        check_onscreen_template: function() { return true; }
+    };
+
     var PRIVATE = "_backend_private";
     var BackendPrivate = function() {
     };
@@ -25,11 +41,86 @@ define(["./note", "./settings", "./signals"], function(Note, Settings, Signals) 
         finalize: XXXUNIMPLEMENTEDXXX,
         real_resolution_changed: XXXUNIMPLEMENTEDXXX,
         real_font_changed: XXXUNIMPLEMENTEDXXX,
-        real_create_context: XXXUNIMPLEMENTEDXXX,
+        real_create_context: function() {
+            if (this.cogl_context) { return true; }
+
+            Note.BACKEND("Creating Cogl renderer");
+            if (this.real_get_renderer) {
+                this.cogl_renderer = this.real_get_renderer();
+            } else {
+                this.cogl_renderer = new Cogl.Renderer();
+            }
+            if (!this.cogl_renderer) {
+                console.error("Failed to create renderer.");
+                return false;
+            }
+
+            Note.BACKEND("Connecting the renderer");
+            if (!this.cogl_renderer.connect()) {
+                console.error("Failed to connect renderer.");
+                this.cogl_renderer = null;
+                return false;
+            }
+
+            Note.BACKEND("Creating Cogl swap chain");
+            var swap_chain = new Cogl.SwapChain();
+
+            Note.BACKEND("Creating Cogl display");
+            if (this.real_get_display) {
+                this.cogl_display = this.real_get_display(this.cogl_renderer,
+                                                          swap_chain);
+            } else {
+                var tmpl = new Cogl.OnscreenTemplate(swap_chain);
+
+                /* XXX: I have some doubts that this is a good design.
+                 *
+                 * Conceptually should we be able to check an onscreen_template
+                 * without more details about the CoglDisplay configuration?
+                 */
+                var res = this.cogl_renderer.check_onscreen_template(tmpl);
+                if (!res) {
+                    console.error("Bad template");
+                    this.cogl_renderer = null;
+                    return false;
+                }
+
+                this.cogl_display = new Cogl.Display(this.cogl_renderer, tmpl);
+            }
+            if (!this.cogl_display) {
+                console.error("Couldn't make Cogl display");
+                this.cogl_renderer = null;
+                return false;
+            }
+
+            Note.BACKEND("Setting up the display");
+            if (!this.cogl_display.setup()) {
+                console.error("Couldn't set up the display");
+                this.cogl_display = null;
+                this.cogl_renderer = null;
+                return false;
+            }
+
+            Note.BACKEND("Creating the Cogl context");
+            this.cogl_context = new Cogl.Context(this.cogl_display);
+
+            return true;
+        },
         real_ensure_context: XXXUNIMPLEMENTEDXXX,
         real_get_features: XXXUNIMPLEMENTEDXXX,
         real_create_stage: XXXUNIMPLEMENTEDXXX,
-        real_init_events: XXXUNIMPLEMENTEDXXX,
+        real_init_events: function() {
+            var input_backend = window.JUTTER_INPUT_BACKEND;
+            if ((!input_backend) || input_backend === "WebGL") {
+                // XXX CSA XXX init events backend
+                this.events_webgl_init();
+            } else if ((!input_backend) || input_backend === "null") {
+                /* no op -- no events */
+            } else if (input_backend) {
+                console.error("Unrecognized input backend", input_backend);
+            } else {
+                console.error("Unknown input backend");
+            }
+        },
         real_translate_event: XXXUNIMPLEMENTEDXXX,
         _init: function() {
             this[PRIVATE] = new BackendPrivate();

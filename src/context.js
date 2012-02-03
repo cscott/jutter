@@ -110,6 +110,9 @@ define(["./backend", "./backend-webgl", "./settings"], function(Backend, Backend
         console.warn("acquire_id unimplemented");
         return 0;
     };
+    Context.release_id = function(id) {
+        console.warn("release_id unimplemented");
+    };
 
     // CSA: avoid circular reference by defining this method here.
 /**

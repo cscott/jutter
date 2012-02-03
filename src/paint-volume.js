@@ -764,6 +764,59 @@ define(["./vertex"], function(Vertex) {
             } else {
                 this.is_2d = false;
             }
+        },
+/*<private>
+ * _clutter_actor_set_default_paint_volume:
+ * @self: a #ClutterActor
+ * @check_gtype: if not %G_TYPE_INVALID, match the type of @self against
+ *   this type
+ * @volume: the #ClutterPaintVolume to set
+ *
+ * Sets the default paint volume for @self.
+ *
+ * This function should be called by #ClutterActor sub-classes that follow
+ * the default assumption that their paint volume is defined by their
+ * allocation.
+ *
+ * If @check_gtype is not %G_TYPE_INVALID, this function will check the
+ * type of @self and only compute the paint volume if the type matches;
+ * this can be used to avoid computing the paint volume for sub-classes
+ * of an actor class
+ *
+ * Return value: %TRUE if the paint volume was set, and %FALSE otherwise
+ */
+        _set_default_paint_volume: function(actor, check_type) {
+            if (check_type) {
+                if (actor.constructor !== check_type) {
+                    return false;
+                }
+            }
+
+            /* calling clutter_actor_get_allocation_* can potentially be very
+             * expensive, as it can result in a synchronous full stage relayout
+             * and redraw
+             */
+            if (!actor.has_allocation) {
+                return false;
+            }
+
+            var box = actor.allocation_box;
+
+            this.width = box.x2 - box.x1;
+            this.height = box.y2 - box.y1;
+
+            return true;
+        },
+        set_from_allocation: function(actor) {
+            this._set_default_paint_volume(actor, null);
+        },
+        /* Currently paint volumes are defined relative to a given actor, but
+         * in some cases it is desireable to be able to change the actor that
+         * a volume relates too (For instance for ClutterClone actors where we
+         * need to masquarade the source actors volume as the volume for the
+         * clone). */
+        _set_reference_actor: function(actor) {
+            this.actor = actor;
         }
     };
     return PaintVolume;
