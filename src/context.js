@@ -91,7 +91,6 @@ define(["./backend", "./backend-webgl", "./settings"], function(Backend, Backend
     // CSA: from clutter_context_get_default_unlocked in clutter-main.c
     Context._get_default = function() {
         if (ClutterCntx === null) {
-            debugger;
             var ctx = new Context();
 
             /* create the windowing system backend */
