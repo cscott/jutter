@@ -5410,22 +5410,22 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
         },
         show: {
             flags: Signals.RUN_FIRST,
-            closure: Actor.prototype.real_show
+            closure: 'real_show'
         },
         hide: {
             flags: Signals.RUN_FIRST,
-            closure: Actor.prototype.real_hide
+            closure: 'real_hide'
         },
         'parent-set': {
             flags: Signals.RUN_LAST,
         },
         'queue-redraw': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_queue_redraw
+            closure: 'real_queue_redraw'
         },
         'queue-relayout': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_queue_relayout
+            closure: 'real_queue_relayout'
         },
         event: {
             flags: Signals.RUN_LAST,
@@ -5465,38 +5465,38 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
         },
         'paint': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_paint
+            closure: 'real_paint'
         },
         'map': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_map
+            closure: 'real_map'
         },
         'unmap': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_unmap
+            closure: 'real_unmap'
         },
         'realize': {
             flags: Signals.RUN_LAST,
         },
         'unrealize': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_unrealize
+            closure: 'real_unrealize'
         },
         'pick': {
             flags: Signals.RUN_LAST,
-            closure: Actor.prototype.real_pick
+            closure: 'real_pick'
         },
         'allocation-changed': {
             flags: Signals.RUN_LAST
         },
         'allocate': {
-            closure: Actor.prototype.real_allocate
+            closure: 'real_allocate'
         },
         'get-preferred-width': {
-            closure: Actor.prototype.real_get_preferred_width
+            closure: 'real_get_preferred_width'
         },
         'get-preferred-height': {
-            closure: Actor.prototype.real_get_preferred_height
+            closure: 'real_get_preferred_height'
         },
     });
 

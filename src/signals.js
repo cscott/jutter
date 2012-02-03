@@ -262,6 +262,13 @@ function addSignalMethods(proto) {
     proto.disconnectAll = _disconnectAll;
 }
 
+function _make_wrapper(name) {
+    if (typeof(name) !== 'string') { return name; }
+    return function() {
+        return (this[name]).apply(this, arguments);
+    };
+}
+
 function register(proto, signals) {
     var props, key;
     for (key in signals) {
@@ -271,7 +278,7 @@ function register(proto, signals) {
                 proto['_signalFlags-'+key] = props.flags;
             }
             if ('closure' in props) {
-                proto['_signalClosure-'+key] = props.closure;
+                proto['_signalClosure-'+key] = _make_wrapper(props.closure);
             }
         }
     }
