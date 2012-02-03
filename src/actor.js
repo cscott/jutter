@@ -330,24 +330,30 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
         this._init();
     };
     ActorPrivate.prototype = {
+        // default values
+        parent: null,
+        flags: 0,
+        pick_id: -1,
+        name: null,
+
+        opacity: 0xFF,
+        show_on_set_parent: true,
+
+        needs_width_request: true,
+        needs_height_request: true,
+        needs_allocation: true,
+
+        cached_width_age: 1,
+        cached_height_age: 1,
+
+        opacity_override: -1,
+        enable_model_view_transform: true,
+
+        text_direction: Enums.TextDirection.DEFAULT,
+
+        // methods
         _init: function() {
-            this.flags = 0;
-            this.pick_id = -1;
-            this.name = null;
-
-            this.opacity = 0xFF;
-            this.show_on_set_parent = true;
-
-            this.needs_width_request = true;
-            this.needs_height_request = true;
-            this.needs_allocation = true;
             this.allocation = new ActorBox(0,0,0,0);
-
-            this.cached_width_age = 1;
-            this.cached_height_age = 1;
-
-            this.opacity_override = -1;
-            this.enable_model_view_transform = true;
 
             /* Initialize an empty paint volume to start with */
             this.last_paint_volume = new PaintVolume();
@@ -358,8 +364,6 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
 
             this.has_clip = false;
             this.clip = new Geometry(0,0,0,0);
-
-            this.text_direction = Enums.TextDirection.DEFAULT;
         },
         get in_destruction() {
             return !!(this.flags & ActorPrivateFlags.IN_DESTRUCTION);
@@ -402,6 +406,10 @@ define(["./actor-box", "./color", "./container", "./context", "./enums", "./even
                     this[key] = params[key];
                 }
             }
+        },
+        // for use by subclasses only
+        _set_toplevel_flag: function() {
+            this[PRIVATE].flags |= ActorPrivateFlags.IS_TOPLEVEL;
         },
 /* XXX - this is for debugging only, remove once working (or leave
  * in only in some debug mode). Should leave it for a little while

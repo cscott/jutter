@@ -52,13 +52,13 @@ define(["./context", "./note"], function(Context, Note) {
         var context = Context._get_default();
 
         /* makes sure we have a GL context; if we have, this is a no-op */
-        if (!context.backend._create_context()) {
+        if (!context.backend.create_context()) {
             return false;
         }
 
         // XXX CSA UNIMPLEMENTED
         __features.flags = 0/*features_from_cogl(Cogl.get_features())*/ |
-            context.backend._get_features();
+            context.backend.get_features();
 
         __features.features_set = true;
 

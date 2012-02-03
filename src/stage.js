@@ -4,7 +4,7 @@
  */
 /*global define:false, console:false */
 'use strict';
-define(["./actor", "./color", "./dom", "./enums", "./group"], function(Actor, Color, Dom, Enums, Group) {
+define(["./actor", "./color", "./dom", "./enums", "./group", "./note"], function(Actor, Color, Dom, Enums, Group, Note) {
     var PickMode = Enums.PickMode;
 
     /** A 'Stage' is a top-level window on which child actors are placed
@@ -61,7 +61,15 @@ define(["./actor", "./color", "./dom", "./enums", "./group"], function(Actor, Co
         _init: {
             value: function(params) {
                 Group.prototype._init.call(this); // superclass init
+
+                /* a stage is a top-level object */
+                this._set_toplevel_flag();
+
                 this[PRIVATE] = new StagePrivate();
+
+                Note.BACKEND("Creating stage from the default backend");
+                // XXX CSA maybe we should do something here.
+
                 if (!params) { params = {}; }
                 if (!params.canvas) {
                     if (!_default_stage) {
@@ -74,7 +82,7 @@ define(["./actor", "./color", "./dom", "./enums", "./group"], function(Actor, Co
                 var geom = { width: params.canvas.width,
                              height: params.canvas.height };
                 this.canvas = params.canvas; // so that set title() will work.
-                // other initializtion from clutter_stage_init()
+                // other initialization from clutter_stage_init()
                 this.reactive = true;
                 this.title = "Jutter"; // XXX "g_get_prgname()"
                 this.key_focus = null;
