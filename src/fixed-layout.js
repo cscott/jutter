@@ -21,7 +21,7 @@ define(["./layout-manager"], function(LayoutManager) {
     FixedLayout.prototype = Object.create(LayoutManager.prototype, {
         _init: {
             value: function() {
-                LayoutManager.prototype._init.call(this); // superclass init
+                Object.getPrototypeOf(FixedLayout.prototype)._init.call(this);
                 this._container = null;
             }
         },
@@ -120,7 +120,8 @@ define(["./layout-manager"], function(LayoutManager) {
                 }
                 // Chain to superclass.
                 Object.getOwnPropertyDescriptor(
-                    LayoutManager.prototype, 'container').set.call(
+                    Object.getPrototypeOf(FixedLayout.prototype),
+                    'container').set.call(
                         this, container);
             }
         }

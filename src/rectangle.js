@@ -36,7 +36,7 @@ define(["./actor", "./color", "./signals"], function(Actor, Color, Signals) {
     Rectangle.prototype = Object.create(Actor.prototype, {
         _init: {
             value: function(params) {
-                Actor.prototype._init.call(this); // superclass init
+                Object.getPrototypeOf(Rectangle.prototype)._init.call(this);
                 this[PRIVATE] = new RectanglePrivate();
                 this.set_props(params);
             }

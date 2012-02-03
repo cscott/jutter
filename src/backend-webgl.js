@@ -9,8 +9,8 @@ define(["./backend"], function(Backend) {
         this._init();
     };
     BackendWebGL.prototype = Object.create(Backend.prototype);
-    BackendWebGL._init = function() {
-        Backend._init(); // super class init
+    BackendWebGL.prototype._init = function() {
+        Object.getPrototypeOf(BackendWebGL.prototype)._init.call(this);
     };
 
     return BackendWebGL;

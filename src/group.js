@@ -35,7 +35,7 @@ define(["./actor", "./fixed-layout", "./signals"], function(Actor, FixedLayout, 
     Group.prototype = Object.create(Actor.prototype, {
         _init: {
             value: function(params) {
-                Actor.prototype._init.call(this); // superclass init
+                Object.getPrototypeOf(Group.prototype)._init.call(this);
                 this[PRIVATE] = {};
                 this[PRIVATE].layout = new FixedLayout();
                 this.layout_manager = this[PRIVATE].layout;

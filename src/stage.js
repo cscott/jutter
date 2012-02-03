@@ -60,7 +60,7 @@ define(["./actor", "./color", "./dom", "./enums", "./group", "./note"], function
     Stage.prototype = Object.create(Group.prototype, {
         _init: {
             value: function(params) {
-                Group.prototype._init.call(this); // superclass init
+                Object.getPrototypeOf(Stage.prototype)._init.call(this);
 
                 /* a stage is a top-level object */
                 this._set_toplevel_flag();
